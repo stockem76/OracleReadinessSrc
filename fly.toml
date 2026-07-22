@@ -5,7 +5,7 @@ app            = "oraclereadinesssrc-dzxnqq"
 primary_region = "lhr"
 
 [build]
-  image = "docker.io/stomat0/oracle-readiness-mcp:latest"
+  dockerfile = "Dockerfile"
 
 [env]
   READINESS_DATA_DIR          = "/data"
