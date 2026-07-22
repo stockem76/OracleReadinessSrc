@@ -147,5 +147,9 @@ class Settings:
         return str(self._data.get("github_file_path", "readiness/latest.md"))
 
     @property
+    def target_releases(self) -> list[str]:
+        return list(self._data.get("target_releases", []))
+
+    @property
     def github_auto_push(self) -> bool:
         return bool(self._data.get("github_auto_push", False))
