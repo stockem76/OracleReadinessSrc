@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Oracle Readiness MCP</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,"Segoe UI",system-ui,sans-serif;font-size:14px;line-height:1.6;color:#1f2328;background:#f0f2f5;min-height:100vh}
+a{color:#3b82d4;text-decoration:none}
+/* layout */
+.shell{display:flex;min-height:100vh}
+.sidebar{width:220px;min-width:220px;background:#1a2332;display:flex;flex-direction:column;padding:0}
+.sidebar-logo{padding:20px 18px 14px;border-bottom:1px solid #2d3f55}
+.sidebar-logo h1{font-size:14px;font-weight:700;color:#fff;letter-spacing:.02em}
+.sidebar-logo p{font-size:11px;color:#7a9bbf;margin-top:2px}
+.nav{flex:1;padding:10px 0}
+.nav-item{display:flex;align-items:center;gap:9px;padding:9px 18px;cursor:pointer;color:#a8c0d8;font-size:13px;font-weight:500;transition:background .15s,color .15s;border-left:3px solid transparent}
+.nav-item:hover{background:#243347;color:#fff}
+.nav-item.active{background:#243347;color:#fff;border-left-color:#3b82d4}
+.nav-icon{width:16px;height:16px;flex-shrink:0;opacity:.8}
+.sidebar-footer{padding:14px 18px;border-top:1px solid #2d3f55;font-size:11px;color:#4a6580}
+.main{flex:1;overflow:auto}
+.topbar{background:#fff;border-bottom:1px solid #e5e7eb;padding:0 28px;height:52px;display:flex;align-items:center;justify-content:space-between}
+.topbar-title{font-weight:700;font-size:15px;color:#1f2328}
+.topbar-right{display:flex;align-items:center;gap:10px}
+.content{padding:28px}
+/* panels */
+.panel{display:none}.panel.active{display:block}
+/* cards */
+.card{background:#fff;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:20px}
+.card-head{padding:16px 20px 12px;border-bottom:1px solid #f0f2f5;display:flex;align-items:center;justify-content:space-between}
+.card-title{font-weight:700;font-size:13px;color:#1f2328;text-transform:uppercase;letter-spacing:.04em}
+.card-body{padding:20px}
+/* grid */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+/* stat tiles */
+.stat{background:#f7f8fa;border:1px solid #e5e7eb;border-radius:6px;padding:14px 16px}
+.stat-label{font-size:11px;color:#57606a;text-transform:uppercase;letter-spacing:.04em}
+.stat-value{font-size:24px;font-weight:700;color:#1f2328;margin-top:2px}
+.stat-sub{font-size:11px;color:#57606a;margin-top:2px}
+/* forms */
+.form-group{margin-bottom:16px}
+label{display:block;font-size:12px;font-weight:600;color:#57606a;margin-bottom:5px;text-transform:uppercase;letter-spacing:.03em}
+input[type=text],input[type=password],input[type=number],select,textarea{width:100%;padding:8px 10px;border:1px solid #d0d7de;border-radius:5px;font-size:13px;font-family:inherit;color:#1f2328;background:#fff;transition:border-color .15s,box-shadow .15s}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#3b82d4;box-shadow:0 0 0 3px rgba(59,130,212,.12)}
+input[type=checkbox]{width:auto;accent-color:#3b82d4}
+.field-hint{font-size:11px;color:#57606a;margin-top:4px}
+.checkbox-row{display:flex;align-items:center;gap:8px}
+.checkbox-row label{margin:0;text-transform:none;font-size:13px;font-weight:500;color:#1f2328}
+/* pillar chips */
+.pillar-grid{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.pillar-chip{display:flex;align-items:center;gap:6px;padding:5px 12px;border:1px solid #d0d7de;border-radius:20px;cursor:pointer;font-size:12px;font-weight:500;color:#57606a;transition:all .15s;user-select:none}
+.pillar-chip.on{background:#dbeafe;border-color:#3b82d4;color:#1e40af}
+/* buttons */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:5px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:background .15s,box-shadow .15s}
+.btn-primary{background:#3b82d4;color:#fff}.btn-primary:hover{background:#2d6bbf}
+.btn-secondary{background:#f0f2f5;color:#1f2328;border:1px solid #d0d7de}.btn-secondary:hover{background:#e5e7eb}
+.btn-danger{background:#dc2626;color:#fff}.btn-danger:hover{background:#b91c1c}
+.btn-success{background:#16a34a;color:#fff}.btn-success:hover{background:#15803d}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+/* badges */
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
+.badge-green{background:#dcfce7;color:#166534}
+.badge-red{background:#fee2e2;color:#991b1b}
+.badge-yellow{background:#fef9c3;color:#92400e}
+.badge-blue{background:#dbeafe;color:#1e40af}
+.badge-gray{background:#f0f2f5;color:#57606a}
+/* alert */
+.alert{padding:10px 14px;border-radius:6px;font-size:13px;margin-bottom:14px;display:flex;align-items:flex-start;gap:8px}
+.alert-success{background:#dcfce7;border:1px solid #bbf7d0;color:#166534}
+.alert-error{background:#fee2e2;border:1px solid #fecaca;color:#991b1b}
+.alert-info{background:#dbeafe;border:1px solid #bfdbfe;color:#1e40af}
+/* table */
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:11px;color:#57606a;text-transform:uppercase;letter-spacing:.04em;padding:7px 10px;border-bottom:2px solid #e5e7eb}
+td{padding:8px 10px;border-bottom:1px solid #f0f2f5;font-size:13px}
+tr:last-child td{border-bottom:none}
+.mono{font-family:ui-monospace,"Cascadia Mono","Courier New",monospace;font-size:12px;background:#f0f2f5;padding:1px 5px;border-radius:3px}
+/* status dot */
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}
+.dot-green{background:#22c55e}.dot-red{background:#ef4444}.dot-yellow{background:#f59e0b}
+/* section divider */
+.section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#57606a;margin:20px 0 10px}
+/* spinner */
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{animation:spin .7s linear infinite;display:inline-block}
+/* log */
+.log-entry{font-size:12px;font-family:ui-monospace,monospace;padding:3px 0;color:#57606a;border-bottom:1px solid #f5f5f5}
+.log-entry:last-child{border:none}
+/* responsive */
+@media(max-width:640px){.grid2,.grid3{grid-template-columns:1fr}.sidebar{display:none}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <h1>Oracle Readiness</h1>
+      <p>MCP Server</p>
+    </div>
+    <nav class="nav" id="nav">
+      <div class="nav-item active" data-panel="dashboard">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2h5v5H2V2zm0 7h5v5H2V9zm7-7h5v5H9V2zm0 7h5v5H9V9z"/></svg>
+        Dashboard
+      </div>
+      <div class="nav-item" data-panel="refresh">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M13.65 2.35A8 8 0 1 0 15 8h-1.5a6.5 6.5 0 1 1-1.14-3.73L10 6.5h5v-5l-1.35 1.35z"/></svg>
+        Data Refresh
+      </div>
+      <div class="nav-item" data-panel="github">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38l-.01-1.49c-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48l-.01 2.2c0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </div>
+      <div class="nav-item" data-panel="connectivity">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M0 11.5A1.5 1.5 0 0 0 1.5 13h.5v1.5A1.5 1.5 0 0 0 3.5 16h9a1.5 1.5 0 0 0 1.5-1.5V13h.5a1.5 1.5 0 0 0 0-3H13V8.5A1.5 1.5 0 0 0 11.5 7H11V5.5A1.5 1.5 0 0 0 9.5 4H9V2.5A2.5 2.5 0 0 0 6.5 0h-1A2.5 2.5 0 0 0 3 2.5V4h-.5A1.5 1.5 0 0 0 1 5.5V7h-.5A1.5 1.5 0 0 0 0 8.5V11h-.001z"/></svg>
+        Connectivity
+      </div>
+      <div class="nav-item" data-panel="schedule">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71V3.5z"/><path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0z"/></svg>
+        Schedule
+      </div>
+      <div class="nav-item" data-panel="releases">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5v-3zm8 0A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5v-3zm-8 8A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5v-3zm8 0A1.5 1.5 0 0 1 10.5 9h3A1.5 1.5 0 0 1 15 10.5v3A1.5 1.5 0 0 1 13.5 15h-3A1.5 1.5 0 0 1 9 13.5v-3z"/></svg>
+        Releases
+      </div>
+      <div class="nav-item" data-panel="mcp">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M5.5 2a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-.5.5H2a.5.5 0 0 1-.5-.5v-4A.5.5 0 0 1 2 2h3.5zM2 9h3.5a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-.5.5H2a.5.5 0 0 1-.5-.5v-4A.5.5 0 0 1 2 9zm7-7h3.5a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-.5.5H9a.5.5 0 0 1-.5-.5v-4A.5.5 0 0 1 9 2zm0 7h3.5a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-.5.5H9a.5.5 0 0 1-.5-.5v-4A.5.5 0 0 1 9 9z"/></svg>
+        MCP Server
+      </div>
+    </nav>
+    <div class="sidebar-footer">oracle-readiness-mcp v2.0</div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title" id="topbar-title">Dashboard</div>
+      <div class="topbar-right">
+        <span id="global-status" class="badge badge-gray">Loading…</span>
+      </div>
+    </div>
+    <div class="content">
+      <div id="alert-bar"></div>
+
+      <!-- ── Dashboard ── -->
+      <div class="panel active" id="panel-dashboard">
+        <div class="grid3" id="stat-tiles">
+          <div class="stat"><div class="stat-label">Total Features</div><div class="stat-value" id="stat-total">–</div><div class="stat-sub">across all pillars</div></div>
+          <div class="stat"><div class="stat-label">Documents Cached</div><div class="stat-value" id="stat-docs">–</div><div class="stat-sub">full-text downloads</div></div>
+          <div class="stat"><div class="stat-label">Background Refresh</div><div class="stat-value" id="stat-refresh">–</div><div class="stat-sub" id="stat-refresh-sub">–</div></div>
+        </div>
+
+        <div class="section-title">Pillar Status</div>
+        <div class="card">
+          <div class="card-body" style="padding:0">
+            <table>
+              <thead><tr><th>Pillar</th><th>Label</th><th>Features</th><th>Last Refresh</th><th>Status</th></tr></thead>
+              <tbody id="pillar-table"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="section-title">Recent Crawl Activity</div>
+        <div class="card">
+          <div class="card-body" style="padding:0">
+            <table>
+              <thead><tr><th>Product</th><th>Time</th><th>Features</th><th>Result</th></tr></thead>
+              <tbody id="crawl-log"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Data Refresh ── -->
+      <div class="panel" id="panel-refresh">
+        <div class="card">
+          <div class="card-head"><span class="card-title">Trigger Refresh</span></div>
+          <div class="card-body">
+            <p style="color:#57606a;font-size:13px;margin-bottom:16px">Fetch the latest readiness data from Oracle now. Select which pillars to refresh, or leave all checked for a full refresh.</p>
+            <div class="form-group">
+              <label>Pillars to refresh</label>
+              <div class="pillar-grid" id="refresh-pillars">
+                <div class="pillar-chip on" data-pillar="erp">ERP</div>
+                <div class="pillar-chip on" data-pillar="hcm">HCM</div>
+                <div class="pillar-chip on" data-pillar="scm">SCM</div>
+                <div class="pillar-chip on" data-pillar="service">Service</div>
+                <div class="pillar-chip on" data-pillar="news">News</div>
+              </div>
+            </div>
+            <button class="btn btn-primary" id="btn-refresh" onclick="triggerRefresh()">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M13.65 2.35A8 8 0 1 0 15 8h-1.5a6.5 6.5 0 1 1-1.14-3.73L10 6.5h5v-5l-1.35 1.35z"/></svg>
+              Refresh Now
+            </button>
+          </div>
+        </div>
+        <div class="card" id="refresh-result-card" style="display:none">
+          <div class="card-head"><span class="card-title">Refresh Results</span></div>
+          <div class="card-body" style="padding:0">
+            <table>
+              <thead><tr><th>Product</th><th>Status</th><th>Features</th><th>Source</th></tr></thead>
+              <tbody id="refresh-result-table"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── GitHub ── -->
+      <div class="panel" id="panel-github">
+        <div class="card">
+          <div class="card-head">
+            <span class="card-title">GitHub Integration</span>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-sm btn-secondary" onclick="testGitHub()">Test Connection</button>
+              <button class="btn btn-sm btn-success" id="btn-push" onclick="pushNow()">Push Report Now</button>
+              <button class="btn btn-sm btn-primary" onclick="saveSection('github')">Save</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div id="github-test-result"></div>
+            <div class="grid2">
+              <div class="form-group">
+                <label>GitHub Personal Access Token</label>
+                <input type="password" id="s-github_token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+                <div class="field-hint">Needs <span class="mono">repo</span> write scope. Leave blank to keep existing.</div>
+              </div>
+              <div class="form-group">
+                <label>Repository</label>
+                <input type="text" id="s-github_repo" placeholder="owner/repo-name">
+                <div class="field-hint">e.g. <span class="mono">acme/oracle-readiness</span></div>
+              </div>
+              <div class="form-group">
+                <label>Branch</label>
+                <input type="text" id="s-github_branch" placeholder="main">
+              </div>
+              <div class="form-group">
+                <label>File path in repo</label>
+                <input type="text" id="s-github_file_path" placeholder="readiness/latest.md">
+              </div>
+            </div>
+            <div class="form-group">
+              <div class="checkbox-row">
+                <input type="checkbox" id="s-github_auto_push">
+                <label for="s-github_auto_push">Auto-push report after every scheduled refresh</label>
+              </div>
+              <div class="field-hint" style="margin-top:4px;margin-left:22px">When enabled, the server will commit an updated Markdown report to GitHub each time the background refresh completes.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Connectivity ── -->
+      <div class="panel" id="panel-connectivity">
+        <div class="card">
+          <div class="card-head">
+            <span class="card-title">Oracle Connectivity</span>
+            <button class="btn btn-sm btn-secondary" onclick="testOracle()">Test Now</button>
+          </div>
+          <div class="card-body">
+            <div id="oracle-test-result"></div>
+            <div class="form-group">
+              <label>User-Agent string</label>
+              <input type="text" id="s-oracle_user_agent">
+              <div class="field-hint">Sent with every request to Oracle's readiness pages.</div>
+            </div>
+            <div class="form-group">
+              <label>Request timeout (seconds)</label>
+              <input type="number" id="s-oracle_timeout_secs" min="5" max="120">
+            </div>
+            <button class="btn btn-primary" onclick="saveSection('connectivity')">Save</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><span class="card-title">MCP Endpoint Info</span></div>
+          <div class="card-body">
+            <table>
+              <tr><td style="width:160px;font-weight:600;color:#57606a">MCP URL</td><td><span class="mono" id="mcp-url">–</span></td></tr>
+              <tr><td style="font-weight:600;color:#57606a">Health URL</td><td><span class="mono" id="health-url">–</span></td></tr>
+              <tr><td style="font-weight:600;color:#57606a">Auth token</td><td id="mcp-auth-row">–</td></tr>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Schedule ── -->
+      <div class="panel" id="panel-schedule">
+        <div class="card">
+          <div class="card-head">
+            <span class="card-title">Refresh Schedule</span>
+            <button class="btn btn-sm btn-primary" onclick="saveSection('schedule')">Save</button>
+          </div>
+          <div class="card-body">
+            <div class="grid2">
+              <div class="form-group">
+                <label>Refresh interval (hours)</label>
+                <input type="number" id="s-refresh_hours" min="1" max="168" step="0.5">
+                <div class="field-hint">How often to scrape Oracle's readiness pages automatically.</div>
+              </div>
+              <div class="form-group">
+                <label>Active pillars</label>
+                <div class="pillar-grid" id="active-pillars">
+                  <div class="pillar-chip" data-pillar="erp">ERP</div>
+                  <div class="pillar-chip" data-pillar="hcm">HCM</div>
+                  <div class="pillar-chip" data-pillar="scm">SCM</div>
+                  <div class="pillar-chip" data-pillar="service">Service</div>
+                  <div class="pillar-chip" data-pillar="news">News</div>
+                </div>
+                <div class="field-hint" style="margin-top:6px">Only active pillars are included in scheduled refreshes.</div>
+              </div>
+            </div>
+            <div class="form-group">
+              <div class="checkbox-row">
+                <input type="checkbox" id="s-autostart_refresh">
+                <label for="s-autostart_refresh">Enable background refresh loop</label>
+              </div>
+              <div class="field-hint" style="margin-top:4px;margin-left:22px">Disable if you prefer to drive refreshes via an external scheduler or cron job.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Releases ── -->
+      <div class="panel" id="panel-releases">
+
+        <!-- Target release selector -->
+        <div class="card" id="release-selector-card">
+          <div class="card-head">
+            <span class="card-title">Target Releases</span>
+            <button class="btn btn-sm btn-primary" id="btn-save-targets" onclick="saveTargetReleases()">Save Selection</button>
+          </div>
+          <div class="card-body">
+            <p style="color:#57606a;font-size:13px;margin-bottom:14px">Select which Oracle Cloud quarterly releases to focus on. Selected releases are highlighted in the drill-down view below.</p>
+            <div class="pillar-grid" id="release-chip-grid" style="flex-wrap:wrap;gap:8px"></div>
+            <div class="field-hint" style="margin-top:10px">Tip: select the releases most relevant to your project — e.g. the current quarter plus one prior.</div>
+          </div>
+        </div>
+
+        <!-- Release overview table -->
+        <div class="card">
+          <div class="card-head">
+            <span class="card-title">Release Overview</span>
+            <span id="release-count-badge" class="badge badge-gray"></span>
+          </div>
+          <div class="card-body" style="padding:0">
+            <table id="release-overview-table">
+              <thead>
+                <tr>
+                  <th>Release</th>
+                  <th>Pillar</th>
+                  <th>Modules</th>
+                  <th style="text-align:right">Features</th>
+                  <th style="text-align:right">Large</th>
+                  <th style="text-align:right">Setup</th>
+                  <th style="text-align:right">Opt-In</th>
+                  <th style="text-align:right">AI</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="release-overview-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Module drill-down (shown when a pillar row is expanded) -->
+        <div class="card" id="module-drill-card" style="display:none">
+          <div class="card-head">
+            <span class="card-title" id="module-drill-title">Modules</span>
+            <button class="btn btn-sm btn-secondary" onclick="closeDrill()">✕ Close</button>
+          </div>
+          <div class="card-body" style="padding:0">
+            <table>
+              <thead>
+                <tr>
+                  <th>Module / Affected Area</th>
+                  <th style="text-align:right">Features</th>
+                  <th style="text-align:right">Large</th>
+                  <th style="text-align:right">Setup</th>
+                  <th style="text-align:right">Opt-In</th>
+                  <th style="text-align:right">AI</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="module-drill-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Feature detail panel (shown when a module is expanded) -->
+        <div class="card" id="feature-detail-card" style="display:none">
+          <div class="card-head">
+            <span class="card-title" id="feature-detail-title">Features</span>
+            <button class="btn btn-sm btn-secondary" onclick="closeFeatures()">✕ Close</button>
+          </div>
+          <div class="card-body" style="padding:0">
+            <table>
+              <thead>
+                <tr>
+                  <th>Feature</th>
+                  <th>Impact</th>
+                  <th>Enablement</th>
+                  <th>Flags</th>
+                  <th>Link</th>
+                </tr>
+              </thead>
+              <tbody id="feature-detail-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ── MCP Server ── -->
+      <div class="panel" id="panel-mcp">
+        <div class="card">
+          <div class="card-head">
+            <span class="card-title">MCP Server Settings</span>
+            <button class="btn btn-sm btn-primary" onclick="saveSection('mcp-server')">Save</button>
+          </div>
+          <div class="card-body">
+            <div class="form-group">
+              <label>Bearer token (HTTP auth)</label>
+              <input type="password" id="s-mcp_token" placeholder="Leave blank for no auth">
+              <div class="field-hint">When set, all MCP clients must send <span class="mono">Authorization: Bearer &lt;token&gt;</span>. Changes take effect on next server restart.</div>
+            </div>
+            <div class="form-group">
+              <label>UI title</label>
+              <input type="text" id="s-ui_title" placeholder="Oracle Readiness MCP">
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><span class="card-title">Available MCP Tools</span></div>
+          <div class="card-body" style="padding:12px 20px">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 20px" id="tool-list"></div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /shell -->
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+const TOOLS = [
+  ["list_products",             "List tracked Oracle Cloud pillars"],
+  ["get_cache_status",          "Per-product refresh times & counts"],
+  ["list_releases",             "All indexed release codes"],
+  ["list_product_families",     "Product families by release"],
+  ["list_modules",              "Modules for a release / family"],
+  ["get_release_notes",         "All entries for a pillar"],
+  ["search_release_notes",      "Full-text search across all data"],
+  ["get_features_by_module",    "Rich feature rows for a module"],
+  ["get_feature_summary",       "Stats: impact, setup, AI counts"],
+  ["compare_releases",          "Diff two releases for a module"],
+  ["get_opt_in_features",       "Features requiring Opt-In"],
+  ["get_setup_required_features","Features requiring Setup"],
+  ["get_high_impact_features",  "Large-scale impact features"],
+  ["get_auto_enabled_features", "Auto-enabling in future update"],
+  ["get_ai_features",           "AI / Agent / Generative features"],
+  ["get_redwood_features",      "Redwood UI features"],
+  ["generate_report",           "Filtered report + optional file save"],
+  ["get_document_content",      "Download full HTML/PDF text"],
+  ["refresh_readiness_data",    "Trigger immediate re-scrape"],
+  ["ingest_xlsx_dump",          "Load Oracle XLSX JSON dump"],
+  ["push_report_to_github",     "Commit report to GitHub repo"],
+];
+
+let currentSettings = {};
+
+// ── Nav ────────────────────────────────────────────────────────────────────
+document.querySelectorAll('.nav-item').forEach(item => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    item.classList.add('active');
+    const panel = document.getElementById('panel-' + item.dataset.panel);
+    if (panel) panel.classList.add('active');
+    document.getElementById('topbar-title').textContent =
+      item.textContent.trim();
+  });
+});
+
+// Pillar chip toggles (generic, works for both refresh and schedule grids)
+document.querySelectorAll('.pillar-grid').forEach(grid => {
+  grid.querySelectorAll('.pillar-chip').forEach(chip => {
+    chip.addEventListener('click', () => chip.classList.toggle('on'));
+  });
+});
+
+// ── API helpers ────────────────────────────────────────────────────────────
+async function api(path, opts = {}) {
+  const r = await fetch(path, {
+    headers: { 'Content-Type': 'application/json' },
+    ...opts,
+  });
+  return r.json();
+}
+
+function showAlert(msg, type = 'info') {
+  const bar = document.getElementById('alert-bar');
+  bar.innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
+  setTimeout(() => bar.innerHTML = '', 4000);
+}
+
+function fmtTime(iso) {
+  if (!iso) return '–';
+  try { return new Date(iso).toLocaleString(); } catch { return iso; }
+}
+
+// ── Load status ────────────────────────────────────────────────────────────
+async function loadStatus() {
+  const data = await api('/api/status');
+
+  // Global badge
+  const total = Object.values(data.cache || {}).reduce((s, v) => s + (v.entry_count || 0), 0);
+  const gbadge = document.getElementById('global-status');
+  gbadge.textContent = `${total} features`;
+  gbadge.className = total > 0 ? 'badge badge-green' : 'badge badge-yellow';
+
+  // Stats
+  document.getElementById('stat-total').textContent = total;
+  document.getElementById('stat-docs').textContent = data.content?.documents_cached ?? 0;
+  document.getElementById('stat-refresh').textContent = data.refresh_running ? 'Running' : 'Idle';
+  document.getElementById('stat-refresh-sub').textContent =
+    data.settings?.autostart_refresh ? `Every ${data.settings.refresh_hours}h` : 'Manual only';
+
+  // Pillar table
+  const pt = document.getElementById('pillar-table');
+  pt.innerHTML = '';
+  for (const [k, v] of Object.entries(data.cache || {})) {
+    const ok = v.last_ok !== false;
+    pt.innerHTML += `<tr>
+      <td><span class="dot ${ok ? 'dot-green' : 'dot-red'}"></span><strong>${k.toUpperCase()}</strong></td>
+      <td style="color:#57606a;font-size:12px">${v.label || ''}</td>
+      <td>${v.entry_count ?? 0}</td>
+      <td style="color:#57606a;font-size:12px">${fmtTime(v.last_refresh)}</td>
+      <td>${v.last_error
+        ? `<span class="badge badge-red">Error</span>`
+        : v.entry_count > 0
+          ? `<span class="badge badge-green">OK</span>`
+          : `<span class="badge badge-gray">Empty</span>`}</td>
+    </tr>`;
+  }
+
+  // Crawl log
+  const cl = document.getElementById('crawl-log');
+  cl.innerHTML = '';
+  for (const row of (data.crawl_log || []).slice(0, 8)) {
+    cl.innerHTML += `<tr>
+      <td><strong>${row.product?.toUpperCase()}</strong></td>
+      <td style="color:#57606a;font-size:12px">${fmtTime(row.crawled_at)}</td>
+      <td>${row.row_count ?? 0}</td>
+      <td>${row.ok
+        ? `<span class="badge badge-green">OK</span>`
+        : `<span class="badge badge-red">Failed</span> <span style="color:#57606a;font-size:11px">${row.error||''}</span>`}</td>
+    </tr>`;
+  }
+  if (!data.crawl_log?.length) {
+    cl.innerHTML = '<tr><td colspan="4" style="color:#57606a;text-align:center;padding:16px">No crawl history yet. Trigger a refresh to start.</td></tr>';
+  }
+}
+
+// ── Load settings ──────────────────────────────────────────────────────────
+async function loadSettings() {
+  const s = await api('/api/settings');
+  currentSettings = s;
+
+  // Populate all text / number inputs
+  for (const [k, v] of Object.entries(s)) {
+    const el = document.getElementById('s-' + k);
+    if (!el) continue;
+    if (el.type === 'checkbox') {
+      el.checked = !!v;
+    } else {
+      el.value = v ?? '';
+    }
+  }
+
+  // Active pillars chips
+  const ap = s.active_pillars || [];
+  document.querySelectorAll('#active-pillars .pillar-chip').forEach(chip => {
+    chip.classList.toggle('on', ap.includes(chip.dataset.pillar));
+  });
+
+  // Connectivity panel
+  const base = window.location.origin;
+  document.getElementById('mcp-url').textContent    = base + '/mcp';
+  document.getElementById('health-url').textContent = base + '/health';
+  document.getElementById('mcp-auth-row').innerHTML = s.mcp_token
+    ? '<span class="badge badge-green">Configured</span>'
+    : '<span class="badge badge-gray">None (open access)</span>';
+}
+
+// ── Tool list ─────────────────────────────────────────────────────────────
+function renderTools() {
+  document.getElementById('tool-list').innerHTML = TOOLS.map(([name, desc]) =>
+    `<div style="padding:4px 0;border-bottom:1px solid #f5f5f5">
+      <div class="mono" style="background:none;padding:0;color:#3b82d4">${name}</div>
+      <div style="font-size:12px;color:#57606a">${desc}</div>
+    </div>`
+  ).join('');
+}
+
+// ── Save sections ─────────────────────────────────────────────────────────
+const SECTION_FIELDS = {
+  'github':       ['github_token','github_repo','github_branch','github_file_path','github_auto_push'],
+  'connectivity': ['oracle_user_agent','oracle_timeout_secs'],
+  'schedule':     ['refresh_hours','autostart_refresh','active_pillars'],
+  'mcp-server':   ['mcp_token','ui_title'],
+};
+
+async function saveSection(section) {
+  const fields = SECTION_FIELDS[section] || [];
+  const patch = {};
+  for (const f of fields) {
+    if (f === 'active_pillars') {
+      patch[f] = [...document.querySelectorAll('#active-pillars .pillar-chip.on')]
+                   .map(c => c.dataset.pillar);
+      continue;
+    }
+    const el = document.getElementById('s-' + f);
+    if (!el) continue;
+    if (el.type === 'checkbox')   patch[f] = el.checked;
+    else if (el.type === 'number') patch[f] = parseFloat(el.value) || el.value;
+    else                          patch[f] = el.value;
+  }
+  const res = await api('/api/settings', { method: 'POST', body: JSON.stringify(patch) });
+  if (res.ok) {
+    showAlert('Settings saved.', 'success');
+    currentSettings = res.settings;
+  } else {
+    showAlert('Save failed: ' + res.error, 'error');
+  }
+}
+
+// ── Trigger refresh ────────────────────────────────────────────────────────
+async function triggerRefresh() {
+  const btn = document.getElementById('btn-refresh');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin">↻</span> Refreshing…';
+
+  const selected = [...document.querySelectorAll('#refresh-pillars .pillar-chip.on')]
+                     .map(c => c.dataset.pillar);
+  const body = selected.length < 5 ? { products: selected } : {};
+
+  try {
+    const res = await api('/api/refresh', { method: 'POST', body: JSON.stringify(body) });
+    const card = document.getElementById('refresh-result-card');
+    const tbody = document.getElementById('refresh-result-table');
+    card.style.display = 'block';
+    tbody.innerHTML = '';
+    let total = 0;
+    for (const r of (res.results || [])) {
+      total += r.total_entries || 0;
+      tbody.innerHTML += `<tr>
+        <td><strong>${r.product?.toUpperCase()}</strong></td>
+        <td>${r.ok
+          ? '<span class="badge badge-green">OK</span>'
+          : '<span class="badge badge-red">Failed</span>'}</td>
+        <td>${r.total_entries ?? (r.ok ? 0 : '–')}</td>
+        <td style="font-size:12px;color:#57606a">${r.source_url || r.error || ''}</td>
+      </tr>`;
+    }
+    showAlert(`Refresh complete — ${total} features indexed.`, 'success');
+    await loadStatus();
+  } catch(e) {
+    showAlert('Refresh error: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '↻ Refresh Now';
+  }
+}
+
+// ── Test GitHub ────────────────────────────────────────────────────────────
+async function testGitHub() {
+  // Save current form values first so the test uses what's on-screen
+  const patch = {};
+  ['github_token','github_repo','github_branch'].forEach(f => {
+    const el = document.getElementById('s-' + f);
+    if (el && el.value && el.value !== '••••••••') patch[f] = el.value;
+  });
+  if (Object.keys(patch).length) {
+    await api('/api/settings', { method: 'POST', body: JSON.stringify(patch) });
+  }
+
+  const el = document.getElementById('github-test-result');
+  el.innerHTML = '<div class="alert alert-info">Testing GitHub connection…</div>';
+  const res = await api('/api/test-github', { method: 'POST', body: '{}' });
+  if (res.ok) {
+    el.innerHTML = `<div class="alert alert-success">
+      ✓ Connected to <strong>${res.repo}</strong>
+      (${res.private ? 'private' : 'public'}, default branch: <span class="mono">${res.default_branch}</span>)
+    </div>`;
+  } else {
+    el.innerHTML = `<div class="alert alert-error">✗ ${res.error}</div>`;
+  }
+}
+
+// ── Push to GitHub ─────────────────────────────────────────────────────────
+async function pushNow() {
+  // Save form values first
+  await saveSection('github');
+  const btn = document.getElementById('btn-push');
+  btn.disabled = true;
+  btn.textContent = '↑ Pushing…';
+  const el = document.getElementById('github-test-result');
+  el.innerHTML = '<div class="alert alert-info">Pushing report to GitHub…</div>';
+  try {
+    const res = await api('/api/push-github', { method: 'POST', body: '{}' });
+    if (res.ok) {
+      el.innerHTML = `<div class="alert alert-success">
+        ✓ ${res.action === 'created' ? 'Created' : 'Updated'} <strong>${res.file_path}</strong>
+        on <strong>${res.repo}</strong> — ${res.features_included} features.
+        <a href="${res.html_url}" target="_blank">View on GitHub ↗</a>
+      </div>`;
+    } else {
+      el.innerHTML = `<div class="alert alert-error">✗ ${res.error}</div>`;
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Push Report Now';
+  }
+}
+
+// ── Test Oracle ────────────────────────────────────────────────────────────
+async function testOracle() {
+  const el = document.getElementById('oracle-test-result');
+  el.innerHTML = '<div class="alert alert-info">Testing Oracle connectivity…</div>';
+  const res = await api('/api/test-oracle');
+  if (res.ok) {
+    el.innerHTML = `<div class="alert alert-success">✓ Oracle readiness pages reachable.</div>`;
+  } else {
+    const detail = Object.entries(res.products || {})
+      .map(([k,v]) => `${k}: ${v.ok ? 'OK' : (v.error || `HTTP ${v.status}`)}`)
+      .join(' | ');
+    el.innerHTML = `<div class="alert alert-error">✗ Some pages unreachable. ${detail}</div>`;
+  }
+}
+
+// ── Releases panel ────────────────────────────────────────────────────────
+const PILLAR_LABELS = { erp:'ERP', hcm:'HCM', scm:'SCM', service:'Service', news:'News' };
+let _releasesData = null;
+
+async function loadReleases() {
+  const data = await api('/api/releases');
+  _releasesData = data;
+
+  // Build target-release chips from all available releases
+  const grid = document.getElementById('release-chip-grid');
+  const targets = new Set(data.target_releases || []);
+  grid.innerHTML = '';
+  for (const rel of (data.all_releases || [])) {
+    const chip = document.createElement('div');
+    chip.className = 'pillar-chip' + (targets.has(rel) ? ' on' : '');
+    chip.dataset.release = rel;
+    chip.textContent = rel;
+    chip.addEventListener('click', () => chip.classList.toggle('on'));
+    grid.appendChild(chip);
+  }
+
+  // Update count badge
+  const badge = document.getElementById('release-count-badge');
+  badge.textContent = `${data.releases.length} releases`;
+  badge.className = 'badge badge-blue';
+
+  // Render overview table — one row per release+pillar combo
+  const tbody = document.getElementById('release-overview-body');
+  tbody.innerHTML = '';
+
+  for (const rel of data.releases) {
+    const isTarget = rel.is_target;
+    const rowBg = isTarget ? 'background:#f0f7ff' : '';
+    // Release header row
+    tbody.innerHTML += `<tr style="${rowBg};border-top:2px solid #e5e7eb">
+      <td colspan="9" style="padding:8px 10px">
+        <strong style="font-size:14px">${rel.release}</strong>
+        ${isTarget ? '<span class="badge badge-blue" style="margin-left:8px">Target</span>' : ''}
+        <span style="color:#57606a;font-size:12px;margin-left:10px">${rel.totals.features} features across ${Object.keys(rel.pillars).length} pillars</span>
+      </td>
+    </tr>`;
+    // Per-pillar rows
+    for (const [pf, ps] of Object.entries(rel.pillars)) {
+      tbody.innerHTML += `<tr class="pillar-row" style="${rowBg};cursor:pointer" onclick="drillIntoPillar('${rel.release}','${pf}')">
+        <td></td>
+        <td>
+          <span style="font-weight:600;font-size:12px">${PILLAR_LABELS[pf] || pf.toUpperCase()}</span>
+        </td>
+        <td style="color:#57606a;font-size:12px">${ps.modules}</td>
+        <td style="text-align:right">${ps.features}</td>
+        <td style="text-align:right">${ps.large_scale ? `<span class="badge badge-red">${ps.large_scale}</span>` : '<span style="color:#ccc">–</span>'}</td>
+        <td style="text-align:right">${ps.setup_required ? `<span class="badge badge-yellow">${ps.setup_required}</span>` : '<span style="color:#ccc">–</span>'}</td>
+        <td style="text-align:right">${ps.opt_in ? `<span class="badge badge-gray">${ps.opt_in}</span>` : '<span style="color:#ccc">–</span>'}</td>
+        <td style="text-align:right">${ps.ai ? `<span class="badge badge-blue">${ps.ai}</span>` : '<span style="color:#ccc">–</span>'}</td>
+        <td style="color:#3b82d4;font-size:12px">▶ Drill down</td>
+      </tr>`;
+    }
+  }
+}
+
+async function drillIntoPillar(release, pillar) {
+  const card = document.getElementById('module-drill-card');
+  const tbody = document.getElementById('module-drill-body');
+  const title = document.getElementById('module-drill-title');
+  card.style.display = 'block';
+  document.getElementById('feature-detail-card').style.display = 'none';
+  card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  title.textContent = `${release} › ${PILLAR_LABELS[pillar]||pillar.toUpperCase()} — Affected Modules`;
+  tbody.innerHTML = '<tr><td colspan="7" style="color:#57606a;text-align:center;padding:16px">Loading…</td></tr>';
+
+  const data = await api(`/api/releases/${release}/${pillar}`);
+  tbody.innerHTML = '';
+  if (!data.modules?.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="color:#57606a;text-align:center;padding:16px">No data found.</td></tr>';
+    return;
+  }
+  for (const m of data.modules) {
+    tbody.innerHTML += `<tr style="cursor:pointer" onclick="drillIntoModule('${release}','${pillar}','${m.module.replace(/'/g,"\\'")}')">
+      <td><strong>${m.module}</strong></td>
+      <td style="text-align:right">${m.features}</td>
+      <td style="text-align:right">${m.large_scale ? `<span class="badge badge-red">${m.large_scale}</span>` : '–'}</td>
+      <td style="text-align:right">${m.setup_required ? `<span class="badge badge-yellow">${m.setup_required}</span>` : '–'}</td>
+      <td style="text-align:right">${m.opt_in ? `<span class="badge badge-gray">${m.opt_in}</span>` : '–'}</td>
+      <td style="text-align:right">${m.ai ? `<span class="badge badge-blue">${m.ai}</span>` : '–'}</td>
+      <td style="color:#3b82d4;font-size:12px">▶ Features</td>
+    </tr>`;
+  }
+}
+
+async function drillIntoModule(release, pillar, module) {
+  const card = document.getElementById('feature-detail-card');
+  const tbody = document.getElementById('feature-detail-body');
+  const title = document.getElementById('feature-detail-title');
+  card.style.display = 'block';
+  card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  title.textContent = `${release} › ${PILLAR_LABELS[pillar]||pillar} › ${module}`;
+  tbody.innerHTML = '<tr><td colspan="5" style="color:#57606a;text-align:center;padding:16px">Loading…</td></tr>';
+
+  const data = await api(`/api/releases/${release}/${pillar}/${encodeURIComponent(module)}`);
+  tbody.innerHTML = '';
+  if (!data.features?.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="color:#57606a;text-align:center;padding:16px">No features found.</td></tr>';
+    return;
+  }
+  const flagHtml = f => {
+    let flags = [];
+    if (f.is_ai)           flags.push(`<span class="badge badge-blue">${f.ai_type||'AI'}</span>`);
+    if (f.is_redwood)      flags.push(`<span class="badge badge-gray">Redwood</span>`);
+    if (f.auto_enabled_in) flags.push(`<span class="badge badge-yellow">Auto→${f.auto_enabled_in}</span>`);
+    return flags.join(' ') || '–';
+  };
+  const impactBadge = v => {
+    if (!v) return '–';
+    if (v.toLowerCase().includes('large')) return `<span class="badge badge-red">Large</span>`;
+    if (v.toLowerCase().includes('small')) return `<span class="badge badge-green">Small</span>`;
+    return `<span class="badge badge-gray">${v}</span>`;
+  };
+  const enabBadge = f => {
+    let parts = [];
+    if (f.setup_required)  parts.push('<span class="badge badge-yellow">Setup</span>');
+    if (f.opt_in_required) parts.push('<span class="badge badge-gray">Opt-In</span>');
+    if (!parts.length && f.enablement) parts.push(`<span style="color:#57606a;font-size:11px">${f.enablement}</span>`);
+    return parts.join(' ') || '–';
+  };
+  for (const f of data.features) {
+    const link = f.html_url
+      ? `<a href="${f.html_url}" target="_blank" style="font-size:11px">HTML ↗</a>`
+      : f.pdf_url
+        ? `<a href="${f.pdf_url}" target="_blank" style="font-size:11px">PDF ↗</a>`
+        : '–';
+    tbody.innerHTML += `<tr>
+      <td>
+        <div style="font-weight:600;font-size:13px">${f.feature_name}</div>
+        ${f.description ? `<div style="font-size:11px;color:#57606a;margin-top:2px">${f.description.substring(0,160)}${f.description.length>160?'…':''}</div>` : ''}
+      </td>
+      <td style="white-space:nowrap">${impactBadge(f.impact)}</td>
+      <td style="white-space:nowrap">${enabBadge(f)}</td>
+      <td style="white-space:nowrap">${flagHtml(f)}</td>
+      <td>${link}</td>
+    </tr>`;
+  }
+}
+
+function closeDrill() {
+  document.getElementById('module-drill-card').style.display = 'none';
+  document.getElementById('feature-detail-card').style.display = 'none';
+}
+function closeFeatures() {
+  document.getElementById('feature-detail-card').style.display = 'none';
+}
+
+async function saveTargetReleases() {
+  const selected = [...document.querySelectorAll('#release-chip-grid .pillar-chip.on')]
+                     .map(c => c.dataset.release);
+  const res = await api('/api/releases/targets', { method: 'POST', body: JSON.stringify({ releases: selected }) });
+  if (res.ok) {
+    showAlert(`Target releases saved: ${selected.join(', ') || 'none (show all)'}`, 'success');
+    await loadReleases();
+  } else {
+    showAlert('Save failed: ' + res.error, 'error');
+  }
+}
+
+// Hook into nav — load releases lazily on first visit
+const _origNavClick = Array.from(document.querySelectorAll('.nav-item'));
+
+// ── Boot ──────────────────────────────────────────────────────────────────
+(async () => {
+  await Promise.all([loadStatus(), loadSettings()]);
+  renderTools();
+  // Auto-refresh status every 60s
+  setInterval(loadStatus, 60_000);
+
+  // Lazy-load Releases panel on first click
+  let releasesLoaded = false;
+  document.querySelectorAll('.nav-item[data-panel="releases"]').forEach(item => {
+    item.addEventListener('click', async () => {
+      if (!releasesLoaded) {
+        releasesLoaded = true;
+        await loadReleases();
+      }
+    });
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+services:
+  oracle-readiness-mcp:
+    image: oracle-readiness-mcp:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: oracle-readiness-mcp
+    restart: unless-stopped
+    ports:
+      - "${READINESS_HTTP_PORT:-8080}:8080"
+    environment:
+      READINESS_DATA_DIR:          /data
+      READINESS_REFRESH_HOURS:     ${READINESS_REFRESH_HOURS:-6}
+      READINESS_AUTOSTART_REFRESH: ${READINESS_AUTOSTART_REFRESH:-1}
+      READINESS_HTTP_HOST:         0.0.0.0
+      READINESS_HTTP_PORT:         8080
+      READINESS_TOKEN:             ${READINESS_TOKEN:-}
+    volumes:
+      - oracle-readiness-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=8)"]
+      interval: 60s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+
+volumes:
+  oracle-readiness-data:
+    driver: local

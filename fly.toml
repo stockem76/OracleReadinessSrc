@@ -1,0 +1,60 @@
+# fly.toml — Oracle Readiness MCP Server on Fly.io
+# Deploy: fly deploy (from this directory)
+# Docs:   https://fly.io/docs/reference/configuration/
+
+app = "oracle-readiness-mcp"
+primary_region = "lhr"       # London — change to your preferred region
+
+[build]
+  image = "docker.io/stomat0/oracle-readiness-mcp:latest"
+
+[env]
+  READINESS_DATA_DIR          = "/data"
+  READINESS_HTTP_HOST         = "0.0.0.0"
+  READINESS_HTTP_PORT         = "8080"
+  READINESS_REFRESH_HOURS     = "6"
+  READINESS_AUTOSTART_REFRESH = "1"
+  PYTHONUNBUFFERED            = "1"
+  # READINESS_TOKEN is set as a secret via: fly secrets set READINESS_TOKEN=...
+
+[mounts]
+  source      = "oracle_readiness_data"
+  destination = "/data"
+
+[[services]]
+  internal_port = 8080
+  protocol      = "tcp"
+  auto_stop_machines  = false   # never sleep
+  auto_start_machines = true
+
+  [[services.ports]]
+    port     = 80
+    handlers = ["http"]
+    [services.ports.force_https]
+      enabled = true
+
+  [[services.ports]]
+    port     = 443
+    handlers = ["tls", "http"]
+
+  [services.concurrency]
+    type       = "requests"
+    hard_limit = 25
+    soft_limit = 20
+
+  [[services.tcp_checks]]
+    interval    = "15s"
+    timeout     = "10s"
+    grace_period = "30s"
+
+  [[services.http_checks]]
+    interval    = "60s"
+    timeout     = "10s"
+    grace_period = "30s"
+    method      = "GET"
+    path        = "/health"
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1
