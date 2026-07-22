@@ -28,10 +28,9 @@ primary_region = "lhr"       # London — change to your preferred region
   auto_start_machines = true
 
   [[services.ports]]
-    port     = 80
-    handlers = ["http"]
-    [services.ports.force_https]
-      enabled = true
+    port        = 80
+    handlers    = ["http"]
+    force_https = true
 
   [[services.ports]]
     port     = 443
