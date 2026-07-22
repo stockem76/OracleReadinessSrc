@@ -1624,6 +1624,30 @@ async def _ui(request: Request) -> FileResponse:
 # Starlette app assembly
 # ---------------------------------------------------------------------------
 
+class _McpAcceptMiddleware:
+    """ASGI middleware that injects the Accept header required by FastMCP's
+    Streamable HTTP transport on /mcp requests that omit it.
+
+    The MCP spec requires clients to send:
+        Accept: application/json, text/event-stream
+    ICA's framer connector does not send this header, causing FastMCP to
+    reject the request with -32600 Not Acceptable.  This middleware injects
+    the header on any /mcp POST that is missing it so ICA can connect.
+    """
+
+    def __init__(self, app) -> None:
+        self.app = app
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] == "http" and scope.get("path", "").startswith("/mcp"):
+            headers = list(scope.get("headers", []))
+            has_accept = any(k.lower() == b"accept" for k, v in headers)
+            if not has_accept:
+                headers.append((b"accept", b"application/json, text/event-stream"))
+                scope = dict(scope, headers=headers)
+        await self.app(scope, receive, send)
+
+
 class _McpBearerMiddleware:
     """ASGI middleware that enforces Bearer token auth on /mcp requests.
 
@@ -1707,7 +1731,8 @@ def _build_starlette_app() -> Starlette:
     ]
     app = Starlette(routes=routes, lifespan=combined_lifespan)
     # Wrap with bearer auth middleware (no-op when mcp_token is empty)
-    return _McpBearerMiddleware(app)
+    # Wrap outermost with Accept header injector so ICA's framer connector works
+    return _McpAcceptMiddleware(_McpBearerMiddleware(app))
 
 # ---------------------------------------------------------------------------
 # Entry point
