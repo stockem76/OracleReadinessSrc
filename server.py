@@ -1630,9 +1630,9 @@ class _McpAcceptMiddleware:
 
     The MCP spec requires clients to send:
         Accept: application/json, text/event-stream
-    ICA's framer connector does not send this header, causing FastMCP to
-    reject the request with -32600 Not Acceptable.  This middleware injects
-    the header on any /mcp POST that is missing it so ICA can connect.
+    Some MCP clients do not send this header, causing FastMCP to reject
+    the request with -32600 Not Acceptable.  This middleware injects
+    the header on any /mcp request that is missing it.
     """
 
     def __init__(self, app) -> None:
@@ -1641,39 +1641,11 @@ class _McpAcceptMiddleware:
     async def __call__(self, scope, receive, send) -> None:
         if scope["type"] == "http" and scope.get("path", "").startswith("/mcp"):
             headers = list(scope.get("headers", []))
-
-            # Log every /mcp request so we can see exactly what ICA sends.
-            method = scope.get("method", "?")
-            raw_hdrs = {k.decode(): v.decode() for k, v in headers}
-            logger.info("[MCP-PROBE] %s /mcp  headers=%s", method, raw_hdrs)
-
-            # Buffer the body so we can log it, then replay it to the app.
-            body_chunks: list[bytes] = []
-            async def _receive():
-                msg = await receive()
-                if msg.get("type") == "http.request":
-                    body_chunks.append(msg.get("body", b""))
-                return msg
-
             has_accept = any(k.lower() == b"accept" for k, v in headers)
             if not has_accept:
                 headers.append((b"accept", b"application/json, text/event-stream"))
                 scope = dict(scope, headers=headers)
-
-            # Wrap send to capture response status too.
-            response_started = False
-            async def _send(msg):
-                nonlocal response_started
-                if msg.get("type") == "http.response.start" and not response_started:
-                    response_started = True
-                    logger.info("[MCP-PROBE] response status=%s", msg.get("status"))
-                    if body_chunks:
-                        body_preview = b"".join(body_chunks)[:512]
-                        logger.info("[MCP-PROBE] request body (first 512 B): %s",
-                                    body_preview.decode("utf-8", errors="replace"))
-                await send(msg)
-
-            await self.app(scope, _receive, _send)
+            await self.app(scope, receive, send)
             return
         await self.app(scope, receive, send)
 
