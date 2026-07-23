@@ -58,6 +58,7 @@ from oracle_scraper import (
 )
 from db import ReadinessDB
 from settings import Settings
+from auth import AuthDB
 
 logging.basicConfig(
     level=logging.INFO,
@@ -91,6 +92,7 @@ class AppState:
         DATA_DIR.mkdir(parents=True, exist_ok=True)
         self.db             = ReadinessDB(DB_PATH)
         self.settings       = Settings(DATA_DIR)
+        self.auth           = AuthDB(DB_PATH)
         self._refresh_task: Optional[asyncio.Task] = None
         self._refresh_lock  = asyncio.Lock()
 
@@ -106,7 +108,10 @@ class AppState:
                     logger.info("Background refresh complete: %s", results)
                 except Exception:
                     logger.exception("Background refresh loop error")
-                await asyncio.sleep(REFRESH_HOURS * 3600)
+                # Re-read refresh_hours from settings each cycle so UI changes are honoured
+                sleep_secs = state.settings.refresh_hours * 3600
+                logger.info("Next refresh in %.1f hours", state.settings.refresh_hours)
+                await asyncio.sleep(sleep_secs)
 
         self._refresh_task = asyncio.create_task(_loop())
 
@@ -1379,6 +1384,200 @@ async def readiness_product_resource(product: str) -> str:
 # REST API endpoints for the web UI
 # ---------------------------------------------------------------------------
 
+# ── Auth helpers ─────────────────────────────────────────────────────────────
+
+def _get_session_token(request: Request) -> str:
+    """Extract session token from Authorization header or session_token cookie."""
+    auth = request.headers.get("authorization", "")
+    if auth.startswith("Bearer "):
+        return auth[7:].strip()
+    return request.cookies.get("session_token", "")
+
+
+def _require_auth(request: Request) -> Optional[dict]:
+    """Return user dict or None if session is invalid."""
+    return state.auth.get_session_user(_get_session_token(request))
+
+
+def _require_admin(request: Request) -> Optional[dict]:
+    """Return user dict only if user is an active admin, else None."""
+    user = _require_auth(request)
+    if user and user.get("role") == "admin":
+        return user
+    return None
+
+
+def _client_ip(request: Request) -> str:
+    return request.headers.get("x-forwarded-for", request.client.host if request.client else "")
+
+
+# ── Auth endpoints ────────────────────────────────────────────────────────────
+
+async def _api_login(request: Request) -> JSONResponse:
+    """POST /api/auth/login  body: {username, password}"""
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Invalid JSON"}, status_code=400)
+    username = (body.get("username") or "").strip()
+    password = body.get("password") or ""
+    ip = _client_ip(request)
+    user = state.auth.verify_password(username, password)
+    if not user:
+        state.auth.audit("LOGIN_FAIL", f"username={username}", ip=ip)
+        return JSONResponse({"ok": False, "error": "Invalid credentials or account disabled"}, status_code=401)
+    token = state.auth.create_session(user["id"], ip=ip, user_agent=request.headers.get("user-agent", ""))
+    state.auth.audit("LOGIN_OK", f"username={username}", user_id=user["id"], username=username, ip=ip)
+    resp = JSONResponse({"ok": True, "token": token, "role": user["role"], "username": user["username"]})
+    resp.set_cookie("session_token", token, httponly=True, samesite="lax", max_age=86400 * 1)
+    return resp
+
+
+async def _api_logout(request: Request) -> JSONResponse:
+    """POST /api/auth/logout"""
+    token = _get_session_token(request)
+    user  = state.auth.get_session_user(token)
+    if user:
+        state.auth.audit("LOGOUT", user_id=user["id"], username=user["username"], ip=_client_ip(request))
+    state.auth.invalidate_session(token)
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie("session_token")
+    return resp
+
+
+async def _api_session_check(request: Request) -> JSONResponse:
+    """GET /api/auth/me — returns current user or 401."""
+    user = _require_auth(request)
+    if not user:
+        return JSONResponse({"ok": False, "error": "Not authenticated"}, status_code=401)
+    return JSONResponse({"ok": True, "username": user["username"], "role": user["role"]})
+
+
+# ── User management endpoints (admin only) ─────────────────────────────────
+
+async def _api_list_users(request: Request) -> JSONResponse:
+    if not _require_admin(request):
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
+    return JSONResponse({"users": state.auth.list_users()})
+
+
+async def _api_create_user(request: Request) -> JSONResponse:
+    admin = _require_admin(request)
+    if not admin:
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Invalid JSON"}, status_code=400)
+    try:
+        user = state.auth.create_user(
+            body.get("username", ""), body.get("password", ""), body.get("role", "user")
+        )
+        state.auth.audit("USER_CREATE", f"new_user={user['username']} role={user['role']}",
+                         user_id=admin["id"], username=admin["username"], ip=_client_ip(request))
+        return JSONResponse({"ok": True, "user": {k: user[k] for k in ("id","username","role","active","created_at")}})
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+
+async def _api_update_user(request: Request) -> JSONResponse:
+    admin = _require_admin(request)
+    if not admin:
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
+    uid = int(request.path_params["user_id"])
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Invalid JSON"}, status_code=400)
+    try:
+        if "active" in body:
+            state.auth.set_active(uid, bool(body["active"]))
+            state.auth.audit("USER_ACTIVE", f"user_id={uid} active={body['active']}",
+                             user_id=admin["id"], username=admin["username"], ip=_client_ip(request))
+        if "role" in body:
+            state.auth.set_role(uid, body["role"])
+            state.auth.audit("USER_ROLE", f"user_id={uid} role={body['role']}",
+                             user_id=admin["id"], username=admin["username"], ip=_client_ip(request))
+        if "password" in body or "new_pass" in body or "cred" in body:
+            state.auth.update_password(uid, body.get("password") or body.get("new_pass") or body.get("cred"))
+            state.auth.audit("USER_PASSWORD", f"user_id={uid}",
+                             user_id=admin["id"], username=admin["username"], ip=_client_ip(request))
+        return JSONResponse({"ok": True})
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+
+async def _api_delete_user(request: Request) -> JSONResponse:
+    admin = _require_admin(request)
+    if not admin:
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
+    uid = int(request.path_params["user_id"])
+    try:
+        target = state.auth.get_user_by_id(uid)
+        state.auth.delete_user(uid)
+        state.auth.audit("USER_DELETE", f"user_id={uid} username={target['username'] if target else '?'}",
+                         user_id=admin["id"], username=admin["username"], ip=_client_ip(request))
+        return JSONResponse({"ok": True})
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+
+# ── Audit log endpoint ────────────────────────────────────────────────────────
+
+async def _api_audit_log(request: Request) -> JSONResponse:
+    if not _require_admin(request):
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
+    limit  = int(request.query_params.get("limit", "200"))
+    offset = int(request.query_params.get("offset", "0"))
+    return JSONResponse({"log": state.auth.get_audit_log(limit=limit, offset=offset)})
+
+
+# ── Session-guard for all /api/* except auth endpoints and /health ────────────
+
+_OPEN_PATHS = {"/health", "/api/auth/login", "/"}
+
+def _is_open(path: str) -> bool:
+    if path in _OPEN_PATHS:
+        return True
+    if path.startswith("/mcp"):     # MCP uses its own Bearer token guard
+        return True
+    return False
+
+
+class _SessionAuthMiddleware:
+    """Reject requests to protected API endpoints when not authenticated."""
+
+    def __init__(self, app) -> None:
+        self.app = app
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] == "http":
+            path = scope.get("path", "")
+            if path.startswith("/api/") and not _is_open(path):
+                # Extract token from cookie or Authorization header
+                headers_raw = {k.lower(): v for k, v in scope.get("headers", [])}
+                auth_hdr = headers_raw.get(b"authorization", b"").decode("latin-1")
+                token = auth_hdr.removeprefix("Bearer ").strip()
+                if not token:
+                    # Try cookie
+                    cookie_hdr = headers_raw.get(b"cookie", b"").decode("latin-1")
+                    for part in cookie_hdr.split(";"):
+                        part = part.strip()
+                        if part.startswith("session_token="):
+                            token = part[len("session_token="):]
+                            break
+                user = state.auth.get_session_user(token) if token else None
+                if not user:
+                    async def _send_403(send):
+                        body = b'{"error":"Not authenticated"}'
+                        await send({"type": "http.response.start", "status": 401,
+                                    "headers": [[b"content-type", b"application/json"]]})
+                        await send({"type": "http.response.body", "body": body})
+                    await _send_403(send)
+                    return
+        await self.app(scope, receive, send)
+
+
 async def _health(request: Request) -> JSONResponse:
     status = state.db.cache_status()
     total  = sum(v.get("entry_count", 0) for v in status.values())
@@ -1404,6 +1603,7 @@ async def _api_get_settings(request: Request) -> JSONResponse:
 
 
 async def _api_save_settings(request: Request) -> JSONResponse:
+    user = _require_auth(request)
     try:
         body = await request.json()
     except Exception:
@@ -1417,6 +1617,9 @@ async def _api_save_settings(request: Request) -> JSONResponse:
             patch[k] = v
         state.settings.update(patch)
         state.settings.save()
+        if user:
+            state.auth.audit("SETTINGS_SAVE", f"keys={list(patch.keys())}",
+                             user_id=user["id"], username=user["username"], ip=_client_ip(request))
         return JSONResponse({"ok": True, "settings": state.settings.as_dict(redact_secrets=True)})
     except KeyError as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
@@ -1718,6 +1921,18 @@ def _build_starlette_app() -> Starlette:
     routes = [
         Route("/",                   _ui,                   methods=["GET"]),
         Route("/health",             _health,               methods=["GET"]),
+        # Auth
+        Route("/api/auth/login",     _api_login,            methods=["POST"]),
+        Route("/api/auth/logout",    _api_logout,           methods=["POST"]),
+        Route("/api/auth/me",        _api_session_check,    methods=["GET"]),
+        # User management (admin only)
+        Route("/api/users",          _api_list_users,       methods=["GET"]),
+        Route("/api/users",          _api_create_user,      methods=["POST"]),
+        Route("/api/users/{user_id}", _api_update_user,     methods=["PATCH"]),
+        Route("/api/users/{user_id}", _api_delete_user,     methods=["DELETE"]),
+        # Audit log
+        Route("/api/audit",          _api_audit_log,        methods=["GET"]),
+        # Status / settings
         Route("/api/status",         _api_status,           methods=["GET"]),
         Route("/api/settings",       _api_get_settings,     methods=["GET"]),
         Route("/api/settings",       _api_save_settings,    methods=["POST"]),
@@ -1729,12 +1944,11 @@ def _build_starlette_app() -> Starlette:
         Route("/api/test-github",           _api_test_github,              methods=["POST"]),
         Route("/api/push-github",           _api_push_github,              methods=["POST"]),
         Route("/api/test-oracle",           _api_test_oracle,              methods=["GET"]),
-        *mcp_app.routes,   # injects the /mcp route at top-level scope (no Mount path-stripping)
+        *mcp_app.routes,
     ]
     app = Starlette(routes=routes, lifespan=combined_lifespan)
-    # Wrap with bearer auth middleware (no-op when mcp_token is empty)
-    # Wrap outermost with Accept header injector so ICA's framer connector works
-    return _McpAcceptMiddleware(_McpBearerMiddleware(app))
+    # Stack (inner → outer): MCP Bearer auth → session auth → Accept injector
+    return _McpAcceptMiddleware(_SessionAuthMiddleware(_McpBearerMiddleware(app)))
 
 # ---------------------------------------------------------------------------
 # Entry point

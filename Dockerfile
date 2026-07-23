@@ -11,7 +11,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application source
-COPY oracle_scraper.py db.py server.py scheduler.py settings.py ./
+COPY oracle_scraper.py db.py server.py scheduler.py settings.py auth.py ./
 COPY static/ ./static/
 
 # Create non-root user and data directory with correct permissions BEFORE the VOLUME declaration
