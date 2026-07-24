@@ -1692,6 +1692,14 @@ class _SessionAuthMiddleware:
 # framer connector can always discover the correct values without guessing.
 _APP_URL = os.environ.get("APP_URL", "https://oraclereadinesssrc-dzxnqq.fly.dev").rstrip("/")
 
+# The canonical Framer project editor URL.
+# ICA's data-ingest service validates project_link against a strict regex:
+#   https://framer.com/projects/<name>--<id>
+# A Fly.io URL will ALWAYS fail that regex — this must be the real Framer project URL.
+# DEAD END: any attempt to use {_APP_URL}/framer-site or {_APP_URL}/framer-metadata
+# as project_link will be rejected by ICA before the HTML is ever fetched.
+_FRAMER_PROJECT_URL = "https://framer.com/projects/oracle-readiness-mcp--D3d8IX9Wv7mmBe1IrSwM-2cmmp"
+
 
 async def _health(request: Request) -> JSONResponse:
     status = state.db.cache_status()
@@ -1700,28 +1708,27 @@ async def _health(request: Request) -> JSONResponse:
         "status":        "ok",
         "server":        "oracle-readiness-mcp",
         "total_features": total,
-        # Included so ICA framer connector discovery has everything in one call
         "mcp_url":       f"{_APP_URL}/mcp",
-        "project_link":  f"{_APP_URL}/framer-metadata",
+        "project_link":  _FRAMER_PROJECT_URL,
     })
 
 
 async def _framer_metadata(request: Request) -> JSONResponse:
-    """GET /framer-metadata — machine-readable connector metadata (JSON).
+    """GET /framer-metadata — human-readable connector reference (JSON).
 
-    Kept for backward-compat. ICA's framer crawler fetches project_link as HTML;
-    use /framer-site as the Connection URL instead.
+    NOT used as project_link — ICA rejects any non-framer.com/projects/ URL.
+    Use as a lookup endpoint to retrieve the correct ICA form field values.
     """
     return JSONResponse({
         "project_name":  "Oracle Readiness MCP",
         "project_id":    "oraclereadinesssrc-dzxnqq",
-        "project_link":  f"{_APP_URL}/framer-site",
+        "project_link":  _FRAMER_PROJECT_URL,
         "mcp_url":       f"{_APP_URL}/mcp",
         "base_url":      _APP_URL,
         "source_type":   "framer",
         "token_env_var": "READINESS_TOKEN",
         "ica_form": {
-            "Connection URL / project_link": f"{_APP_URL}/framer-site",
+            "Connection URL / project_link": _FRAMER_PROJECT_URL,
             "MCP URL":                       f"{_APP_URL}/mcp",
             "Project name":                  "Oracle Readiness MCP",
             "Project ID":                    "oraclereadinesssrc-dzxnqq",
