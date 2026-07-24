@@ -724,6 +724,10 @@ async def ingest_xlsx_dump(params: XlsxIngestInput) -> dict:
 
     The dump must be a JSON file with {"headers": [...], "rows": [[...],...]}
     shape — e.g. the Feature_Summary.json produced by the bob xlsx-dump tool.
+
+    After loading features into the features table, automatically backfills
+    flag columns (is_ai, is_redwood, opt_in_required, etc.) into any matching
+    feature_details rows so the ICA CSV endpoints include correct flags.
     """
     path = Path(params.json_path)
     if not path.exists():
@@ -735,8 +739,17 @@ async def ingest_xlsx_dump(params: XlsxIngestInput) -> dict:
             source_url=params.source_url or READINESS_APP_URL,
         )
         count = await state.db.upsert_features(features)
-        return {"features_loaded": count, "source": str(path),
-                "message": f"Successfully loaded {count} features from {params.json_path}"}
+        # Backfill flags into feature_details for any matching rows
+        backfilled = state.db.backfill_flags_from_features()
+        return {
+            "features_loaded": count,
+            "feature_details_backfilled": backfilled,
+            "source": str(path),
+            "message": (
+                f"Loaded {count} features from {params.json_path}. "
+                f"Backfilled flags into {backfilled} feature_details rows."
+            ),
+        }
     except Exception as e:
         return {"error": str(e)}
 

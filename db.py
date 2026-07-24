@@ -97,9 +97,19 @@ CREATE INDEX IF NOT EXISTS idx_fd_family  ON feature_details(product_family);
 CREATE INDEX IF NOT EXISTS idx_fd_module  ON feature_details(module);
 """
 
-# Safe migration: add feature_detail_url to features table if not already present
+# Safe migrations — each runs inside a try/except so re-running is idempotent
 _MIGRATION_DDL = [
     "ALTER TABLE features ADD COLUMN feature_detail_url TEXT",
+    # Add Oracle-flag columns to feature_details so the ICA CSV can
+    # serve flags (is_ai, is_redwood etc.) without a JOIN on features
+    "ALTER TABLE feature_details ADD COLUMN is_ai       INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE feature_details ADD COLUMN ai_type     TEXT",
+    "ALTER TABLE feature_details ADD COLUMN is_redwood  INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE feature_details ADD COLUMN auto_enabled_in TEXT",
+    "ALTER TABLE feature_details ADD COLUMN opt_in_required INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE feature_details ADD COLUMN setup_required  INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE feature_details ADD COLUMN impact      TEXT",
+    "ALTER TABLE feature_details ADD COLUMN enablement  TEXT",
 ]
 
 # ---------------------------------------------------------------------------
@@ -390,6 +400,10 @@ class ReadinessDB:
         module, description_full, business_benefit, steps_to_enable,
         tips_considerations, access_requirements, key_resources, other_sections,
         optional_uptake, fetched_at.
+
+        Optional flag keys (populated by ingest_xlsx_dump backfill):
+        is_ai, ai_type, is_redwood, auto_enabled_in, opt_in_required,
+        setup_required, impact, enablement.
         """
         async with self._lock:
             self._execute(
@@ -398,8 +412,10 @@ class ReadinessDB:
                   (feature_page_url, feature_name, release, product_family, module,
                    description_full, business_benefit, steps_to_enable,
                    tips_considerations, access_requirements, key_resources,
-                   other_sections, optional_uptake, fetched_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                   other_sections, optional_uptake, fetched_at,
+                   is_ai, ai_type, is_redwood, auto_enabled_in,
+                   opt_in_required, setup_required, impact, enablement)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     detail["feature_page_url"],
@@ -416,6 +432,14 @@ class ReadinessDB:
                     detail.get("other_sections"),
                     int(detail.get("optional_uptake", False)),
                     detail.get("fetched_at", ""),
+                    int(detail.get("is_ai", False)),
+                    detail.get("ai_type"),
+                    int(detail.get("is_redwood", False)),
+                    detail.get("auto_enabled_in"),
+                    int(detail.get("opt_in_required", False)),
+                    int(detail.get("setup_required", False)),
+                    detail.get("impact"),
+                    detail.get("enablement"),
                 ),
             )
             self._conn.commit()
@@ -591,62 +615,119 @@ class ReadinessDB:
     def get_details_with_flags(
         self, release: Optional[str] = None, product_family: Optional[str] = None
     ) -> list[dict]:
-        """Feature detail rows LEFT JOINed with flags from the features table.
+        """Feature detail rows with flag columns (is_ai, is_redwood, etc.).
 
-        Returns one row per feature_details entry, enriched with:
-          is_ai, ai_type, is_redwood, auto_enabled_in, opt_in_required,
-          setup_required, impact, enablement, description (from features).
+        The flag columns are stored directly on feature_details since the schema
+        migration added them (see _MIGRATION_DDL).  They are populated either by
+        the deep scraper (parse_feature_detail_page) or by a backfill UPDATE run
+        after ingest_xlsx_dump.
 
-        Rows that exist only in feature_details (no matching features row)
-        still appear — their flag columns will be None/0.
-
-        Used by _ica_features() so the CSV has both rich text AND boolean flags.
+        Used by _ica_features() so the CSV has both rich description text AND
+        the boolean classification flags in contextText.
         """
         conds: list[str] = []
         params: list = []
         if release:
-            conds.append("UPPER(fd.release) = UPPER(?)")
+            conds.append("UPPER(release) = UPPER(?)")
             params.append(release)
         if product_family:
-            conds.append("LOWER(fd.product_family) = LOWER(?)")
+            conds.append("LOWER(product_family) = LOWER(?)")
             params.append(product_family)
 
         where = f"WHERE {' AND '.join(conds)}" if conds else ""
         rows = self._execute(
             f"""
             SELECT
-                fd.id,
-                fd.feature_page_url,
-                fd.feature_name,
-                fd.release,
-                fd.product_family,
-                fd.module,
-                fd.description_full      AS description,
-                fd.business_benefit,
-                fd.steps_to_enable,
-                fd.tips_considerations,
-                fd.key_resources,
-                fd.other_sections,
-                fd.optional_uptake,
-                fd.fetched_at,
-                COALESCE(f.impact,          '')  AS impact,
-                COALESCE(f.enablement,      '')  AS enablement,
-                COALESCE(f.auto_enabled_in, '')  AS auto_enabled_in,
-                COALESCE(f.is_redwood,       0)  AS is_redwood,
-                COALESCE(f.is_ai,            0)  AS is_ai,
-                COALESCE(f.ai_type,         '')  AS ai_type,
-                COALESCE(f.setup_required,   0)  AS setup_required,
-                COALESCE(f.opt_in_required,  0)  AS opt_in_required,
-                COALESCE(f.html_url,        '')  AS html_url
-            FROM feature_details fd
-            LEFT JOIN features f
-                ON  UPPER(f.release)        = UPPER(fd.release)
-                AND LOWER(f.product_family) = LOWER(fd.product_family)
-                AND LOWER(f.module)         = LOWER(fd.module)
-                AND LOWER(f.feature_name)   = LOWER(fd.feature_name)
+                id, feature_page_url, feature_name, release, product_family, module,
+                description_full  AS description,
+                business_benefit, steps_to_enable, tips_considerations,
+                key_resources, other_sections, optional_uptake, fetched_at,
+                COALESCE(impact,          '')  AS impact,
+                COALESCE(enablement,      '')  AS enablement,
+                COALESCE(auto_enabled_in, '')  AS auto_enabled_in,
+                COALESCE(is_redwood,       0)  AS is_redwood,
+                COALESCE(is_ai,            0)  AS is_ai,
+                COALESCE(ai_type,         '')  AS ai_type,
+                COALESCE(setup_required,   0)  AS setup_required,
+                COALESCE(opt_in_required,  0)  AS opt_in_required
+            FROM feature_details
             {where}
-            ORDER BY fd.product_family, fd.module, fd.feature_name
+            ORDER BY product_family, module, feature_name
             """,
             params,
         ).fetchall()
         return [dict(r) for r in rows]
+
+    def backfill_flags_from_features(self, release: Optional[str] = None) -> int:
+        """Copy flag columns from features → feature_details for rows that match.
+
+        Matches on (release, product_family, feature_name) case-insensitively.
+        Returns the number of feature_details rows updated.
+        """
+        cond = "AND UPPER(fd.release) = UPPER(?)" if release else ""
+        params = [release] if release else []
+        result = self._execute(
+            f"""
+            UPDATE feature_details AS fd
+            SET
+                is_ai           = (SELECT COALESCE(f.is_ai,           0) FROM features f
+                                   WHERE LOWER(f.feature_name)=LOWER(fd.feature_name)
+                                     AND UPPER(f.release)=UPPER(fd.release)
+                                     AND LOWER(f.product_family)=LOWER(fd.product_family) LIMIT 1),
+                ai_type         = (SELECT f.ai_type FROM features f
+                                   WHERE LOWER(f.feature_name)=LOWER(fd.feature_name)
+                                     AND UPPER(f.release)=UPPER(fd.release)
+                                     AND LOWER(f.product_family)=LOWER(fd.product_family) LIMIT 1),
+                is_redwood      = (SELECT COALESCE(f.is_redwood,       0) FROM features f
+                                   WHERE LOWER(f.feature_name)=LOWER(fd.feature_name)
+                                     AND UPPER(f.release)=UPPER(fd.release)
+                                     AND LOWER(f.product_family)=LOWER(fd.product_family) LIMIT 1),
+                auto_enabled_in = (SELECT f.auto_enabled_in FROM features f
+                                   WHERE LOWER(f.feature_name)=LOWER(fd.feature_name)
+                                     AND UPPER(f.release)=UPPER(fd.release)
+                                     AND LOWER(f.product_family)=LOWER(fd.product_family) LIMIT 1),
+                opt_in_required = (SELECT COALESCE(f.opt_in_required,  0) FROM features f
+                                   WHERE LOWER(f.feature_name)=LOWER(fd.feature_name)
+                                     AND UPPER(f.release)=UPPER(fd.release)
+                                     AND LOWER(f.product_family)=LOWER(fd.product_family) LIMIT 1),
+                setup_required  = (SELECT COALESCE(f.setup_required,   0) FROM features f
+                                   WHERE LOWER(f.feature_name)=LOWER(fd.feature_name)
+                                     AND UPPER(f.release)=UPPER(fd.release)
+                                     AND LOWER(f.product_family)=LOWER(fd.product_family) LIMIT 1),
+                impact          = (SELECT f.impact FROM features f
+                                   WHERE LOWER(f.feature_name)=LOWER(fd.feature_name)
+                                     AND UPPER(f.release)=UPPER(fd.release)
+                                     AND LOWER(f.product_family)=LOWER(fd.product_family) LIMIT 1),
+                enablement      = (SELECT f.enablement FROM features f
+                                   WHERE LOWER(f.feature_name)=LOWER(fd.feature_name)
+                                     AND UPPER(f.release)=UPPER(fd.release)
+                                     AND LOWER(f.product_family)=LOWER(fd.product_family) LIMIT 1)
+            WHERE EXISTS (
+                SELECT 1 FROM features f
+                WHERE LOWER(f.feature_name)=LOWER(fd.feature_name)
+                  AND UPPER(f.release)=UPPER(fd.release)
+                  AND LOWER(f.product_family)=LOWER(fd.product_family)
+            )
+            {cond}
+            """,
+            params,
+        )
+        self._commit()
+        return result.rowcount
+
+    def get_all_details_for_release(
+        self, release: str, product_family: Optional[str] = None
+    ) -> list[dict]:
+        """All feature details for a release, optionally filtered by pillar."""
+        conds = ["UPPER(release) = UPPER(?)"]
+        params: list = [release]
+        if product_family:
+            conds.append("LOWER(product_family) = LOWER(?)")
+            params.append(product_family)
+        rows = self._execute(
+            f"SELECT * FROM feature_details WHERE {' AND '.join(conds)} "
+            f"ORDER BY product_family, module, feature_name",
+            params,
+        ).fetchall()
+        return [dict(r) for r in rows]
+
