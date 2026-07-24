@@ -348,12 +348,6 @@ SCHEMA_CHANGES = {
             "note": "Add manually in Schema Builder → Feature node → Properties panel. Not uploadable via CSV.",
         },
         {
-            "target":  "REQUIRES_ACTION",
-            "type":    "EXTEND_EDGE",
-            "status":  "manual_ui_action",
-            "note":    "Open edge REQUIRES_ACTION → Domain → add custom:section.",
-        },
-        {
             "target":  "enum:oracleFusion26cReleaseCode",
             "type":    "EXTEND_ENUM",
             "status":  "csv_ready",

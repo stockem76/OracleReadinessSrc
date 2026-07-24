@@ -98,9 +98,7 @@ Schema Builder properties/edge panels:
    - `autoEnabledIn` (string, optional)
    - `optInRequired` (boolean, optional)
 
-2. **Extend REQUIRES_ACTION domain** → add `custom:section` to domain list
-
-3. **Set featureCode optional** on abstract parent `oracleFusionGraphEntity`
+2. **Set featureCode optional** on abstract parent `oracleFusionGraphEntity`
    (change `required: true` → `required: false`)
 
 ### MCP tool for programmatic access
