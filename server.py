@@ -1628,7 +1628,7 @@ async def _api_audit_log(request: Request) -> JSONResponse:
 
 # ── Session-guard for all /api/* except auth endpoints and /health ────────────
 
-_OPEN_PATHS = {"/health", "/framer-metadata", "/api/auth/login", "/"}
+_OPEN_PATHS = {"/health", "/framer-metadata", "/framer-site", "/sitemap.xml", "/api/auth/login", "/"}
 
 def _is_open(path: str) -> bool:
     if path in _OPEN_PATHS:
@@ -1694,33 +1694,25 @@ async def _health(request: Request) -> JSONResponse:
 
 
 async def _framer_metadata(request: Request) -> JSONResponse:
-    """GET /framer-metadata — returns the exact field values required by the
-    ICA Context Studio framer connector form.
+    """GET /framer-metadata — machine-readable connector metadata (JSON).
 
-    When adding/re-adding the connector in ICA Context Studio, use:
-      Connection URL (project_link): <this endpoint URL>
-      MCP URL:                       <mcp_url value below>
-      Token:                         READINESS_TOKEN env var value
-
-    ICA requires project_link to be a URL it can resolve; pointing it at this
-    endpoint means the framer connector can self-validate its own configuration.
+    Kept for backward-compat. ICA's framer crawler fetches project_link as HTML;
+    use /framer-site as the Connection URL instead.
     """
     return JSONResponse({
         "project_name":  "Oracle Readiness MCP",
         "project_id":    "oraclereadinesssrc-dzxnqq",
-        "project_link":  f"{_APP_URL}/framer-metadata",
+        "project_link":  f"{_APP_URL}/framer-site",
         "mcp_url":       f"{_APP_URL}/mcp",
         "base_url":      _APP_URL,
         "source_type":   "framer",
-        # Hint for the ICA form — token itself is NOT returned here for security
         "token_env_var": "READINESS_TOKEN",
         "ica_form": {
-            "Connection URL / project_link": f"{_APP_URL}/framer-metadata",
+            "Connection URL / project_link": f"{_APP_URL}/framer-site",
             "MCP URL":                       f"{_APP_URL}/mcp",
             "Project name":                  "Oracle Readiness MCP",
             "Project ID":                    "oraclereadinesssrc-dzxnqq",
         },
-        # ICA Schema Builder Upload Sample Data endpoints
         "ica_csv_endpoints": {
             "schema_changes":    f"{_APP_URL}/api/ica/schema-changes.json",
             "features":          f"{_APP_URL}/api/ica/features.csv",
@@ -1731,6 +1723,92 @@ async def _framer_metadata(request: Request) -> JSONResponse:
             "derivation_methods":f"{_APP_URL}/api/ica/derivation-methods.csv",
         },
     })
+
+
+async def _framer_site(request: Request) -> HTMLResponse:
+    """GET /framer-site — HTML landing page that ICA's Framer crawler accepts.
+
+    ICA's data-ingestion backend fetches the Connection URL as an HTML page and
+    validates it has a crawlable HTML structure before starting ingestion.
+    This endpoint returns a rich HTML page so the crawler accepts it, while
+    embedding the MCP tool list so ICA's content extractor indexes real data.
+    """
+    releases = state.db.list_releases()
+    families = state.db.list_product_families()
+    total = sum(
+        state.db.cache_status().get(p, {}).get("entry_count", 0)
+        for p in state.db.cache_status()
+    )
+    release_list = ", ".join(releases) if releases else "26C"
+    family_list  = ", ".join(families) if families else "HCM, ERP, SCM"
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Oracle Readiness MCP</title>
+  <meta name="description" content="Oracle Fusion Cloud Readiness MCP server — {total} features indexed across {family_list} for releases {release_list}">
+</head>
+<body>
+  <header>
+    <h1>Oracle Readiness MCP</h1>
+    <p>Oracle Fusion Cloud Readiness intelligence server for IBM Consulting Advantage Context Studio.</p>
+  </header>
+  <main>
+    <section id="overview">
+      <h2>Overview</h2>
+      <p>This MCP server provides structured access to Oracle Fusion Cloud release notes, feature flags, and readiness data for {release_list}.</p>
+      <ul>
+        <li>Total features indexed: {total}</li>
+        <li>Product families: {family_list}</li>
+        <li>Releases available: {release_list}</li>
+        <li>MCP endpoint: {_APP_URL}/mcp</li>
+      </ul>
+    </section>
+    <section id="tools">
+      <h2>Available MCP Tools</h2>
+      <ul>
+        <li><strong>search_release_notes</strong> — Full-text search across Oracle Fusion release features</li>
+        <li><strong>get_release_notes</strong> — All features for a release and module</li>
+        <li><strong>get_feature_summary</strong> — Statistical summary for a module in a release</li>
+        <li><strong>compare_releases</strong> — Diff two releases for a module</li>
+        <li><strong>get_ai_features</strong> — AI and Agent features in a release</li>
+        <li><strong>get_opt_in_features</strong> — Features requiring Opt-In to enable</li>
+        <li><strong>get_setup_required_features</strong> — Features requiring Setup configuration</li>
+        <li><strong>get_high_impact_features</strong> — Large-scale impact features</li>
+        <li><strong>get_auto_enabled_features</strong> — Features auto-enabling in a future update</li>
+        <li><strong>get_redwood_features</strong> — Oracle Redwood UX features</li>
+        <li><strong>get_feature_detail</strong> — Full detail: Steps to Enable, Business Benefit, Key Resources, Tips</li>
+        <li><strong>list_releases</strong> — List all indexed Oracle releases</li>
+        <li><strong>list_modules</strong> — List modules for a release</li>
+        <li><strong>get_ica_framer_csv</strong> — ICA Schema Builder Upload Sample Data CSV generator</li>
+      </ul>
+    </section>
+    <section id="sitemap">
+      <h2>Sitemap</h2>
+      <ul>
+        <li><a href="{_APP_URL}/framer-site">Home</a></li>
+        <li><a href="{_APP_URL}/health">Health</a></li>
+        <li><a href="{_APP_URL}/api/ica/schema-changes.json">ICA Schema Changes</a></li>
+        <li><a href="{_APP_URL}/sitemap.xml">XML Sitemap</a></li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>"""
+    return HTMLResponse(content=html)
+
+
+async def _sitemap_xml(request: Request) -> Response:
+    """GET /sitemap.xml — XML sitemap so ICA's Framer crawler can discover pages."""
+    xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>{_APP_URL}/framer-site</loc><changefreq>daily</changefreq><priority>1.0</priority></url>
+  <url><loc>{_APP_URL}/health</loc><changefreq>always</changefreq><priority>0.8</priority></url>
+  <url><loc>{_APP_URL}/api/ica/schema-changes.json</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
+</urlset>"""
+    return Response(content=xml, media_type="application/xml")
 
 
 # ---------------------------------------------------------------------------
@@ -2170,6 +2248,8 @@ def _build_starlette_app() -> Starlette:
         Route("/",                   _ui,                   methods=["GET"]),
         Route("/health",             _health,               methods=["GET"]),
         Route("/framer-metadata",    _framer_metadata,      methods=["GET"]),
+        Route("/framer-site",        _framer_site,          methods=["GET"]),
+        Route("/sitemap.xml",        _sitemap_xml,          methods=["GET"]),
         # Auth
         Route("/api/auth/login",     _api_login,            methods=["POST"]),
         Route("/api/auth/logout",    _api_logout,           methods=["POST"]),
