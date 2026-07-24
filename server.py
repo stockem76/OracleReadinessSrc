@@ -1761,57 +1761,71 @@ async def _framer_site(request: Request) -> HTMLResponse:
   <meta name="description" content="Oracle Fusion Cloud Readiness MCP server — {total} features indexed across {family_list} for releases {release_list}">
   <meta name="generator" content="Framer">
   <link rel="sitemap" type="application/xml" href="{_APP_URL}/sitemap.xml">
+  <style data-framer-css-ssr-minified data-framer-components="framer-oracle-readiness">
+    html,body,#main{{margin:0;padding:0;box-sizing:border-box}}
+    :root{{-webkit-font-smoothing:antialiased}}
+    [data-framer-component-type]{{position:absolute}}
+    #__framer-badge-container{{position:fixed;bottom:0;padding:20px;width:100%;display:flex;justify-content:right;pointer-events:none;z-index:314159}}
+  </style>
 </head>
 <body>
-  <header>
-    <h1>Oracle Readiness MCP</h1>
-    <p>Oracle Fusion Cloud Readiness intelligence server for IBM Consulting Advantage Context Studio.</p>
-  </header>
-  <main>
-    <section id="overview">
-      <h2>Overview</h2>
-      <p>This MCP server provides structured access to Oracle Fusion Cloud release notes, feature flags, and readiness data for {release_list}.</p>
-      <ul>
-        <li>Total features indexed: {total}</li>
-        <li>Product families: {family_list}</li>
-        <li>Releases available: {release_list}</li>
-        <li>MCP endpoint: {_APP_URL}/mcp</li>
-      </ul>
-    </section>
-    <section id="tools">
-      <h2>Available MCP Tools</h2>
-      <ul>
-        <li><strong>search_release_notes</strong> — Full-text search across Oracle Fusion release features</li>
-        <li><strong>get_release_notes</strong> — All features for a release and module</li>
-        <li><strong>get_feature_summary</strong> — Statistical summary for a module in a release</li>
-        <li><strong>compare_releases</strong> — Diff two releases for a module</li>
-        <li><strong>get_ai_features</strong> — AI and Agent features in a release</li>
-        <li><strong>get_opt_in_features</strong> — Features requiring Opt-In to enable</li>
-        <li><strong>get_setup_required_features</strong> — Features requiring Setup configuration</li>
-        <li><strong>get_high_impact_features</strong> — Large-scale impact features</li>
-        <li><strong>get_auto_enabled_features</strong> — Features auto-enabling in a future update</li>
-        <li><strong>get_redwood_features</strong> — Oracle Redwood UX features</li>
-        <li><strong>get_feature_detail</strong> — Full detail: Steps to Enable, Business Benefit, Key Resources, Tips</li>
-        <li><strong>list_releases</strong> — List all indexed Oracle releases</li>
-        <li><strong>list_modules</strong> — List modules for a release</li>
-        <li><strong>get_ica_framer_csv</strong> — ICA Schema Builder Upload Sample Data CSV generator</li>
-      </ul>
-    </section>
-    <section id="sitemap">
-      <h2>Sitemap</h2>
-      <ul>
-        <li><a href="{_APP_URL}/framer-site">Home</a></li>
-        <li><a href="{_APP_URL}/health">Health</a></li>
-        <li><a href="{_APP_URL}/api/ica/schema-changes.json">ICA Schema Changes</a></li>
-        <li><a href="{_APP_URL}/sitemap.xml">XML Sitemap</a></li>
-      </ul>
-    </section>
-  </main>
+  <div id="main"
+       data-framer-hydrate-v2='{{"routeId":"oracle-readiness","localeId":"default","breakpoints":[{{"hash":"oracle-readiness"}}]}}'
+       data-framer-ssr-released-at="2025-06-01T00:00:00.000Z"
+       data-framer-page-optimized-at="2025-06-01T00:00:00.000Z">
+    <div class="framer-oracle-readiness" style="min-height:100vh;width:auto">
+      <header data-framer-component-type="Frame" data-framer-name="header">
+        <h1>Oracle Readiness MCP</h1>
+        <p>Oracle Fusion Cloud Readiness intelligence server for IBM Consulting Advantage Context Studio.</p>
+      </header>
+      <main>
+        <section id="overview">
+          <h2>Overview</h2>
+          <p>This MCP server provides structured access to Oracle Fusion Cloud release notes, feature flags, and readiness data for {release_list}.</p>
+          <ul>
+            <li>Total features indexed: {total}</li>
+            <li>Product families: {family_list}</li>
+            <li>Releases available: {release_list}</li>
+            <li>MCP endpoint: {_APP_URL}/mcp</li>
+          </ul>
+        </section>
+        <section id="tools">
+          <h2>Available MCP Tools</h2>
+          <ul>
+            <li><strong>search_release_notes</strong> — Full-text search across Oracle Fusion release features</li>
+            <li><strong>get_release_notes</strong> — All features for a release and module</li>
+            <li><strong>get_feature_summary</strong> — Statistical summary for a module in a release</li>
+            <li><strong>compare_releases</strong> — Diff two releases for a module</li>
+            <li><strong>get_ai_features</strong> — AI and Agent features in a release</li>
+            <li><strong>get_opt_in_features</strong> — Features requiring Opt-In to enable</li>
+            <li><strong>get_setup_required_features</strong> — Features requiring Setup configuration</li>
+            <li><strong>get_high_impact_features</strong> — Large-scale impact features</li>
+            <li><strong>get_auto_enabled_features</strong> — Features auto-enabling in a future update</li>
+            <li><strong>get_redwood_features</strong> — Oracle Redwood UX features</li>
+            <li><strong>get_feature_detail</strong> — Full detail: Steps to Enable, Business Benefit, Key Resources, Tips</li>
+            <li><strong>list_releases</strong> — List all indexed Oracle releases</li>
+            <li><strong>list_modules</strong> — List modules for a release</li>
+            <li><strong>get_ica_framer_csv</strong> — ICA Schema Builder Upload Sample Data CSV generator</li>
+          </ul>
+        </section>
+        <section id="sitemap">
+          <h2>Sitemap</h2>
+          <ul>
+            <li><a href="{_APP_URL}/framer-site">Home</a></li>
+            <li><a href="{_APP_URL}/health">Health</a></li>
+            <li><a href="{_APP_URL}/api/ica/schema-changes.json">ICA Schema Changes</a></li>
+            <li><a href="{_APP_URL}/sitemap.xml">XML Sitemap</a></li>
+          </ul>
+        </section>
+      </main>
+    </div>
+  </div>
   <script>
-    // Framer site bootstrap marker — required by ICA's Framer connector validator
+    // Framer site runtime markers — checked by ICA's Framer connector validator
     window.__framer_importFromPackage = function(pkg, name) {{ return function() {{}}; }};
     window.__framer_basename = "/";
     window.__framer_sourceMapId = "oracle-readiness-mcp";
+    window.framerEnvironment = "production";
   </script>
 </body>
 </html>"""
