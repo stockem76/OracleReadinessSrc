@@ -587,3 +587,66 @@ class ReadinessDB:
             params,
         ).fetchall()
         return [dict(r) for r in rows]
+
+    def get_details_with_flags(
+        self, release: Optional[str] = None, product_family: Optional[str] = None
+    ) -> list[dict]:
+        """Feature detail rows LEFT JOINed with flags from the features table.
+
+        Returns one row per feature_details entry, enriched with:
+          is_ai, ai_type, is_redwood, auto_enabled_in, opt_in_required,
+          setup_required, impact, enablement, description (from features).
+
+        Rows that exist only in feature_details (no matching features row)
+        still appear — their flag columns will be None/0.
+
+        Used by _ica_features() so the CSV has both rich text AND boolean flags.
+        """
+        conds: list[str] = []
+        params: list = []
+        if release:
+            conds.append("UPPER(fd.release) = UPPER(?)")
+            params.append(release)
+        if product_family:
+            conds.append("LOWER(fd.product_family) = LOWER(?)")
+            params.append(product_family)
+
+        where = f"WHERE {' AND '.join(conds)}" if conds else ""
+        rows = self._execute(
+            f"""
+            SELECT
+                fd.id,
+                fd.feature_page_url,
+                fd.feature_name,
+                fd.release,
+                fd.product_family,
+                fd.module,
+                fd.description_full      AS description,
+                fd.business_benefit,
+                fd.steps_to_enable,
+                fd.tips_considerations,
+                fd.key_resources,
+                fd.other_sections,
+                fd.optional_uptake,
+                fd.fetched_at,
+                COALESCE(f.impact,          '')  AS impact,
+                COALESCE(f.enablement,      '')  AS enablement,
+                COALESCE(f.auto_enabled_in, '')  AS auto_enabled_in,
+                COALESCE(f.is_redwood,       0)  AS is_redwood,
+                COALESCE(f.is_ai,            0)  AS is_ai,
+                COALESCE(f.ai_type,         '')  AS ai_type,
+                COALESCE(f.setup_required,   0)  AS setup_required,
+                COALESCE(f.opt_in_required,  0)  AS opt_in_required,
+                COALESCE(f.html_url,        '')  AS html_url
+            FROM feature_details fd
+            LEFT JOIN features f
+                ON  UPPER(f.release)        = UPPER(fd.release)
+                AND LOWER(f.product_family) = LOWER(fd.product_family)
+                AND LOWER(f.module)         = LOWER(fd.module)
+                AND LOWER(f.feature_name)   = LOWER(fd.feature_name)
+            {where}
+            ORDER BY fd.product_family, fd.module, fd.feature_name
+            """,
+            params,
+        ).fetchall()
+        return [dict(r) for r in rows]

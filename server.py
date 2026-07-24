@@ -1893,16 +1893,32 @@ async def _ica_derivation_methods(request: Request) -> Response:
 async def _ica_features(request: Request) -> Response:
     """GET /api/ica/features.csv — Feature nodes from live DB for ICA Upload Sample Data.
 
+    Pulls from feature_details LEFT JOINed with features so each row carries
+    both the rich description_full text AND the boolean flags (is_ai, is_redwood,
+    opt_in_required, setup_required, auto_enabled_in, impact, enablement).
+
+    Falls back to the features table if feature_details is empty for the
+    requested release (e.g. before a deep scrape has been run).
+
     Query params:
         release   — filter to a specific release (default: all)
         pillar    — filter to a product family (default: all)
     """
     release = request.query_params.get("release")
     pillar  = request.query_params.get("pillar")
-    features = state.db.filter_entries(
-        pillars=[pillar] if pillar else None,
-        releases=[release] if release else None,
+
+    features = state.db.get_details_with_flags(
+        release=release or None,
+        product_family=pillar or None,
     )
+
+    # Fallback: feature_details empty — use the features table (module stubs)
+    if not features:
+        features = state.db.filter_entries(
+            pillars=[pillar] if pillar else None,
+            releases=[release] if release else None,
+        )
+
     return Response(
         content=_ica.csv_response(_ica.build_features_csv(features)),
         media_type="text/csv",
@@ -1919,16 +1935,13 @@ async def _ica_actions(request: Request) -> Response:
     """
     release = request.query_params.get("release")
     pillar  = request.query_params.get("pillar")
-    details = state.db.get_all_details_for_release(
-        release or "", pillar
-    ) if release else []
 
-    # If no release given, pull from all known releases
-    if not release:
-        all_details: list[dict] = []
+    if release:
+        details = state.db.get_all_details_for_release(release, pillar or None)
+    else:
+        details = []
         for rel in state.db.list_releases():
-            all_details.extend(state.db.get_all_details_for_release(rel, pillar))
-        details = all_details
+            details.extend(state.db.get_all_details_for_release(rel, pillar or None))
 
     return Response(
         content=_ica.csv_response(_ica.build_actions_csv(details)),
