@@ -1534,7 +1534,7 @@ async def _api_audit_log(request: Request) -> JSONResponse:
 
 # ── Session-guard for all /api/* except auth endpoints and /health ────────────
 
-_OPEN_PATHS = {"/health", "/api/auth/login", "/"}
+_OPEN_PATHS = {"/health", "/framer-metadata", "/api/auth/login", "/"}
 
 def _is_open(path: str) -> bool:
     if path in _OPEN_PATHS:
