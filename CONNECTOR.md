@@ -180,11 +180,10 @@ https://framer.com/projects/<ProjectName>--<ProjectID>
 - `<ProjectName>` — kebab-case display name (e.g. `Oracle-Readiness-MCP`)
 - `<ProjectID>` — short alphanumeric ID from the Framer project URL (e.g. `AbCdEfGh`)
 
-**How to get the correct URL:**
-1. Open [framer.com](https://framer.com) and go to your project
-2. Copy the URL from the browser address bar — it will look like
-   `https://framer.com/projects/Oracle-Readiness-MCP--AbCdEfGh`
-3. Use that exact URL as `project_link` in the ICA source `connection_details`
+**Confirmed working URL (project created 2026-07-24):**
+```
+https://framer.com/projects/oracle-readiness-mcp--D3d8IX9Wv7mmBe1IrSwM-2cmmp
+```
 
 **These URL formats are ALL rejected by the validator:**
 - `https://oracle-readiness-mcp.framer.app` — published site subdomain
@@ -197,7 +196,7 @@ await fetch('/data-ingest/sources/src_e157006ebcf1', {
   method:'PUT', credentials:'include',
   headers:{'Content-Type':'application/json'},
   body: JSON.stringify({connection_details:{
-    project_link: 'https://framer.com/projects/Oracle-Readiness-MCP--YOURPROJECTID'
+    project_link: 'https://framer.com/projects/oracle-readiness-mcp--D3d8IX9Wv7mmBe1IrSwM-2cmmp'
   }})
 });
 ```
