@@ -130,6 +130,44 @@ get_ica_framer_csv(entity_type="derivation-methods")
 
 ---
 
+## ICA Context Studio MCP Gateway
+
+The context is also accessible as a **Streamable HTTP MCP server** via the IBM
+Services Essentials MCP Gateway.  Add this block to your Bob / agent MCP config
+(`mcp_servers` in `bob-config.yaml` or equivalent):
+
+```json
+"context-studio": {
+  "type": "streamable-http",
+  "url": "https://servicesessentials.ibm.com/mcp-gateway/service/gateway/servers/<GATEWAY_SERVER_ID>/mcp",
+  "headers": {
+    "Authorization": "Bearer <ICA_GATEWAY_TOKEN>",
+    "x-api-key": "<CONTEXT_ID>"
+  },
+  "disabled": false
+}
+```
+
+Substitute the three placeholders — all values are in the table below:
+
+| Placeholder | Value | Where to get it |
+|---|---|---|
+| `<GATEWAY_SERVER_ID>` | `8ccdd203bdee4014b08e82eedb6046e2` | IBM Services Essentials → MCP Gateway |
+| `<CONTEXT_ID>` | `ctx_9baeb72e480b` | Context Studio — 26c Complete Ontology |
+| `<ICA_GATEWAY_TOKEN>` | token starting with `orm-` | IBM Services Essentials → API Keys |
+
+| Field | Notes |
+|---|---|
+| **Protocol** | Streamable HTTP (MCP 2025-03-26) |
+| **Gateway server ID** | `8ccdd203bdee4014b08e82eedb6046e2` |
+| **Context (x-api-key)** | `ctx_9baeb72e480b` — routes all queries to the 26c Complete Ontology |
+
+> **Security note:** Never commit the raw Bearer token to git.  Store it in your
+> local Bob config or an environment variable.  The `x-api-key` is the public
+> context ID and does not need rotation.
+
+---
+
 ## Common errors and fixes
 
 | Error | Cause | Fix |
