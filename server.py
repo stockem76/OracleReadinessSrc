@@ -1964,6 +1964,7 @@ def _build_starlette_app() -> Starlette:
     routes = [
         Route("/",                   _ui,                   methods=["GET"]),
         Route("/health",             _health,               methods=["GET"]),
+        Route("/framer-metadata",    _framer_metadata,      methods=["GET"]),
         # Auth
         Route("/api/auth/login",     _api_login,            methods=["POST"]),
         Route("/api/auth/logout",    _api_logout,           methods=["POST"]),
