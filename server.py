@@ -46,6 +46,8 @@ from starlette.responses import FileResponse, HTMLResponse, JSONResponse, Respon
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
+import ica as _ica
+
 from oracle_scraper import (
     PRODUCTS,
     PRODUCT_LABELS,
@@ -1369,6 +1371,98 @@ async def deep_scrape_feature_details(params: DeepScrapeInput, ctx: Context) -> 
 
 
 # ---------------------------------------------------------------------------
+# MCP Tool — ICA framer CSV export
+# ---------------------------------------------------------------------------
+
+class IcaCsvInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    entity_type: str = Field(
+        ...,
+        description=(
+            "Which ICA CSV to generate. One of: features, actions, modules, "
+            "releases, action-types, derivation-methods, schema-changes."
+        ),
+    )
+    release: Optional[str] = Field(
+        default=None,
+        description="Filter features/actions to a specific release e.g. '26C'. Omit for all.",
+    )
+    pillar: Optional[str] = Field(
+        default=None,
+        description="Filter features/actions to a product family e.g. 'HCM'. Omit for all.",
+    )
+
+
+@mcp.tool(name="get_ica_framer_csv",
+          annotations={"readOnlyHint": True, "idempotentHint": True})
+async def get_ica_framer_csv(params: IcaCsvInput) -> dict:
+    """Return an ICA Context Studio 'Upload Sample Data' CSV for the requested entity type.
+
+    Use this to populate the 26c Complete Ontology schema extensions described
+    in the ICA Schema — Targeted Changes plan.  The CSV can be pasted directly
+    into the Schema Builder → Upload Sample Data dialog.
+
+    entity_type values:
+      features          — Feature nodes (all 965+ with AI/Redwood/optIn flags in contextText)
+      actions           — Action nodes (Steps to Enable, Business Benefit, Key Resources, Tips)
+      modules           — Module enum extension (missing modules from live data)
+      releases          — Release code enum extension (26D, 27A, 27B)
+      action-types      — ActionType enum extension (Business Benefit, Key Resources)
+      derivation-methods — DerivationMethod M017_MCP_FRAMER_INGESTION
+      schema-changes    — JSON manifest of all required schema changes with status/endpoints
+    """
+    et = (params.entity_type or "").lower().strip()
+
+    if et == "releases":
+        rows = _ica.build_releases_csv()
+        return {"entity_type": et, "row_count": len(rows), "csv": _ica.csv_response(rows)}
+
+    if et == "action-types":
+        rows = _ica.build_action_types_csv()
+        return {"entity_type": et, "row_count": len(rows), "csv": _ica.csv_response(rows)}
+
+    if et == "derivation-methods":
+        rows = _ica.build_derivation_methods_csv()
+        return {"entity_type": et, "row_count": len(rows), "csv": _ica.csv_response(rows)}
+
+    if et == "modules":
+        releases = state.db.list_releases()
+        live_modules: list[str] = []
+        for rel in releases:
+            live_modules.extend(state.db.list_modules(rel))
+        rows = _ica.build_modules_csv(sorted(set(live_modules)))
+        return {"entity_type": et, "row_count": len(rows), "csv": _ica.csv_response(rows)}
+
+    if et == "features":
+        features = state.db.filter_entries(
+            pillars=[params.pillar] if params.pillar else None,
+            releases=[params.release] if params.release else None,
+        )
+        rows = _ica.build_features_csv(features)
+        return {"entity_type": et, "row_count": len(rows), "csv": _ica.csv_response(rows)}
+
+    if et == "actions":
+        if params.release:
+            details = state.db.get_all_details_for_release(params.release, params.pillar)
+        else:
+            details = []
+            for rel in state.db.list_releases():
+                details.extend(state.db.get_all_details_for_release(rel, params.pillar))
+        rows = _ica.build_actions_csv(details)
+        return {"entity_type": et, "row_count": len(rows), "csv": _ica.csv_response(rows)}
+
+    if et == "schema-changes":
+        return {"entity_type": et, "schema_changes": _ica.SCHEMA_CHANGES}
+
+    valid = ["features", "actions", "modules", "releases", "action-types",
+             "derivation-methods", "schema-changes"]
+    return {
+        "error": f"Unknown entity_type '{params.entity_type}'. Valid values: {valid}",
+        "valid_types": valid,
+    }
+
+
+# ---------------------------------------------------------------------------
 # MCP Resource
 # ---------------------------------------------------------------------------
 
@@ -1541,6 +1635,8 @@ def _is_open(path: str) -> bool:
         return True
     if path.startswith("/mcp"):     # MCP uses its own Bearer token guard
         return True
+    if path.startswith("/api/ica/"): # ICA framer endpoints are public (read-only)
+        return True
     return False
 
 
@@ -1624,7 +1720,116 @@ async def _framer_metadata(request: Request) -> JSONResponse:
             "Project name":                  "Oracle Readiness MCP",
             "Project ID":                    "oraclereadinesssrc-dzxnqq",
         },
+        # ICA Schema Builder Upload Sample Data endpoints
+        "ica_csv_endpoints": {
+            "schema_changes":    f"{_APP_URL}/api/ica/schema-changes.json",
+            "features":          f"{_APP_URL}/api/ica/features.csv",
+            "actions":           f"{_APP_URL}/api/ica/actions.csv",
+            "modules":           f"{_APP_URL}/api/ica/modules.csv",
+            "releases":          f"{_APP_URL}/api/ica/releases.csv",
+            "action_types":      f"{_APP_URL}/api/ica/action-types.csv",
+            "derivation_methods":f"{_APP_URL}/api/ica/derivation-methods.csv",
+        },
     })
+
+
+# ---------------------------------------------------------------------------
+# ICA framer CSV export endpoints  (/api/ica/*)
+# ---------------------------------------------------------------------------
+
+async def _ica_releases(request: Request) -> Response:
+    """GET /api/ica/releases.csv — extend enum:oracleFusion26cReleaseCode (26D,27A,27B)."""
+    return Response(
+        content=_ica.csv_response(_ica.build_releases_csv()),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=releases.csv"},
+    )
+
+
+async def _ica_action_types(request: Request) -> Response:
+    """GET /api/ica/action-types.csv — extend enum:oracleFusion26cActionType."""
+    return Response(
+        content=_ica.csv_response(_ica.build_action_types_csv()),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=action-types.csv"},
+    )
+
+
+async def _ica_modules(request: Request) -> Response:
+    """GET /api/ica/modules.csv — extend enum:oracleFusion26cModule with missing modules."""
+    # Grab the full list of live modules from the DB so extras discovered from
+    # real data are included automatically on top of the hardcoded schema extras.
+    releases = state.db.list_releases()
+    live_modules: list[str] = []
+    for rel in releases:
+        live_modules.extend(state.db.list_modules(rel))
+    unique_modules = sorted(set(live_modules))
+    return Response(
+        content=_ica.csv_response(_ica.build_modules_csv(unique_modules)),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=modules.csv"},
+    )
+
+
+async def _ica_derivation_methods(request: Request) -> Response:
+    """GET /api/ica/derivation-methods.csv — add M017_MCP_FRAMER_INGESTION."""
+    return Response(
+        content=_ica.csv_response(_ica.build_derivation_methods_csv()),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=derivation-methods.csv"},
+    )
+
+
+async def _ica_features(request: Request) -> Response:
+    """GET /api/ica/features.csv — Feature nodes from live DB for ICA Upload Sample Data.
+
+    Query params:
+        release   — filter to a specific release (default: all)
+        pillar    — filter to a product family (default: all)
+    """
+    release = request.query_params.get("release")
+    pillar  = request.query_params.get("pillar")
+    features = state.db.filter_entries(
+        pillars=[pillar] if pillar else None,
+        releases=[release] if release else None,
+    )
+    return Response(
+        content=_ica.csv_response(_ica.build_features_csv(features)),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=features.csv"},
+    )
+
+
+async def _ica_actions(request: Request) -> Response:
+    """GET /api/ica/actions.csv — Action nodes from scraped feature detail sections.
+
+    Query params:
+        release   — filter to a specific release (default: all)
+        pillar    — filter to a product family (default: all)
+    """
+    release = request.query_params.get("release")
+    pillar  = request.query_params.get("pillar")
+    details = state.db.get_all_details_for_release(
+        release or "", pillar
+    ) if release else []
+
+    # If no release given, pull from all known releases
+    if not release:
+        all_details: list[dict] = []
+        for rel in state.db.list_releases():
+            all_details.extend(state.db.get_all_details_for_release(rel, pillar))
+        details = all_details
+
+    return Response(
+        content=_ica.csv_response(_ica.build_actions_csv(details)),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=actions.csv"},
+    )
+
+
+async def _ica_schema_changes(request: Request) -> JSONResponse:
+    """GET /api/ica/schema-changes.json — machine-readable schema change manifest."""
+    return JSONResponse(_ica.SCHEMA_CHANGES)
 
 
 async def _api_status(request: Request) -> JSONResponse:
@@ -1988,6 +2193,14 @@ def _build_starlette_app() -> Starlette:
         Route("/api/test-github",           _api_test_github,              methods=["POST"]),
         Route("/api/push-github",           _api_push_github,              methods=["POST"]),
         Route("/api/test-oracle",           _api_test_oracle,              methods=["GET"]),
+        # ICA framer CSV export (public, no auth required)
+        Route("/api/ica/releases.csv",          _ica_releases,           methods=["GET"]),
+        Route("/api/ica/action-types.csv",      _ica_action_types,       methods=["GET"]),
+        Route("/api/ica/modules.csv",           _ica_modules,            methods=["GET"]),
+        Route("/api/ica/derivation-methods.csv", _ica_derivation_methods, methods=["GET"]),
+        Route("/api/ica/features.csv",          _ica_features,           methods=["GET"]),
+        Route("/api/ica/actions.csv",           _ica_actions,            methods=["GET"]),
+        Route("/api/ica/schema-changes.json",   _ica_schema_changes,     methods=["GET"]),
         *mcp_app.routes,
     ]
     app = Starlette(routes=routes, lifespan=combined_lifespan)
