@@ -13,17 +13,19 @@ When you click **"Add data source"** → **"Framer"** in Context Studio, fill in
 | ICA form field | Value |
 |---|---|
 | **Connection name** | `Oracle Readiness MCP` |
-| **Connection URL / Project link** | `https://oraclereadinesssrc-dzxnqq.fly.dev/framer-metadata` |
+| **Connection URL / Project link** | `https://framer.com/projects/oracle-readiness-mcp--D3d8IX9Wv7mmBe1IrSwM-2cmmp` |
 | **MCP URL** | `https://oraclereadinesssrc-dzxnqq.fly.dev/mcp` |
 | **Project ID** | `oraclereadinesssrc-dzxnqq` |
 | **Project name** | `Oracle Readiness MCP` |
 | **Token / Bearer secret** | *(value of `READINESS_TOKEN` — see below)* |
 | **Re-Ingestion Required** | ☑ checked |
 
-> **Why `/framer-metadata` as the Connection URL?**
-> ICA's framer connector validates that `project_link` is a resolvable URL.
-> Pointing it at `/framer-metadata` satisfies that check and lets the connector
-> self-discover its own configuration at any time.
+> **Why `framer.com/projects/...` as the Connection URL?**
+> ICA's `data-ingest` service validates `project_link` against a strict regex that
+> only accepts the canonical Framer project editor URL format:
+> `https://framer.com/projects/<ProjectName>--<ProjectID>`
+> The Fly.io URL and `/framer-site` spoofing approaches were both rejected.
+> The real Framer project URL is the only format that passes.
 
 ---
 
