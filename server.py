@@ -1578,10 +1578,53 @@ class _SessionAuthMiddleware:
         await self.app(scope, receive, send)
 
 
+# Canonical public URL for this deployment (set via APP_URL env var; falls back
+# to the Fly.io default).  Used by /health and /framer-metadata so the ICA
+# framer connector can always discover the correct values without guessing.
+_APP_URL = os.environ.get("APP_URL", "https://oraclereadinesssrc-dzxnqq.fly.dev").rstrip("/")
+
+
 async def _health(request: Request) -> JSONResponse:
     status = state.db.cache_status()
     total  = sum(v.get("entry_count", 0) for v in status.values())
-    return JSONResponse({"status": "ok", "server": "oracle-readiness-mcp", "total_features": total})
+    return JSONResponse({
+        "status":        "ok",
+        "server":        "oracle-readiness-mcp",
+        "total_features": total,
+        # Included so ICA framer connector discovery has everything in one call
+        "mcp_url":       f"{_APP_URL}/mcp",
+        "project_link":  f"{_APP_URL}/framer-metadata",
+    })
+
+
+async def _framer_metadata(request: Request) -> JSONResponse:
+    """GET /framer-metadata — returns the exact field values required by the
+    ICA Context Studio framer connector form.
+
+    When adding/re-adding the connector in ICA Context Studio, use:
+      Connection URL (project_link): <this endpoint URL>
+      MCP URL:                       <mcp_url value below>
+      Token:                         READINESS_TOKEN env var value
+
+    ICA requires project_link to be a URL it can resolve; pointing it at this
+    endpoint means the framer connector can self-validate its own configuration.
+    """
+    return JSONResponse({
+        "project_name":  "Oracle Readiness MCP",
+        "project_id":    "oraclereadinesssrc-dzxnqq",
+        "project_link":  f"{_APP_URL}/framer-metadata",
+        "mcp_url":       f"{_APP_URL}/mcp",
+        "base_url":      _APP_URL,
+        "source_type":   "framer",
+        # Hint for the ICA form — token itself is NOT returned here for security
+        "token_env_var": "READINESS_TOKEN",
+        "ica_form": {
+            "Connection URL / project_link": f"{_APP_URL}/framer-metadata",
+            "MCP URL":                       f"{_APP_URL}/mcp",
+            "Project name":                  "Oracle Readiness MCP",
+            "Project ID":                    "oraclereadinesssrc-dzxnqq",
+        },
+    })
 
 
 async def _api_status(request: Request) -> JSONResponse:
