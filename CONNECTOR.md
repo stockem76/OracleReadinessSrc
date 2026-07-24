@@ -168,12 +168,66 @@ Substitute the three placeholders — all values are in the table below:
 
 ---
 
+## ICA Framer source — correct project_link format
+
+The ICA `data-ingest` Python service validates the `project_link` with a strict
+regex that **only** accepts the canonical Framer project editor URL:
+
+```
+https://framer.com/projects/<ProjectName>--<ProjectID>
+```
+
+- `<ProjectName>` — kebab-case display name (e.g. `Oracle-Readiness-MCP`)
+- `<ProjectID>` — short alphanumeric ID from the Framer project URL (e.g. `AbCdEfGh`)
+
+**How to get the correct URL:**
+1. Open [framer.com](https://framer.com) and go to your project
+2. Copy the URL from the browser address bar — it will look like
+   `https://framer.com/projects/Oracle-Readiness-MCP--AbCdEfGh`
+3. Use that exact URL as `project_link` in the ICA source `connection_details`
+
+**These URL formats are ALL rejected by the validator:**
+- `https://oracle-readiness-mcp.framer.app` — published site subdomain
+- `https://oraclereadinesssrc-dzxnqq.fly.dev/framer-site` — Fly.io URL
+- `https://framer.com/m/...` — share/preview links
+
+**Update the source record via console:**
+```javascript
+await fetch('/data-ingest/sources/src_e157006ebcf1', {
+  method:'PUT', credentials:'include',
+  headers:{'Content-Type':'application/json'},
+  body: JSON.stringify({connection_details:{
+    project_link: 'https://framer.com/projects/Oracle-Readiness-MCP--YOURPROJECTID'
+  }})
+});
+```
+
+**Then trigger ingest:**
+```javascript
+const r = await fetch('/data-ingest/framer/ingest', {
+  method:'POST', credentials:'include',
+  headers:{'Content-Type':'application/json'},
+  body: JSON.stringify({source_id:'src_e157006ebcf1', context_id:'ctx_9baeb72e480b'})
+});
+console.log(r.status, await r.text());
+// Expect: 202 {"status":"accepted","message":"Framer ingestion started..."}
+```
+
+**Check ingestion progress:**
+```javascript
+const p = await (await fetch('/data-ingest/framer-ingest/source/src_e157006ebcf1', {credentials:'include'})).json();
+console.log(JSON.stringify(p, null, 2));
+```
+
+---
+
 ## Common errors and fixes
 
 | Error | Cause | Fix |
 |---|---|---|
-| `missing project_link` | Connection URL field left blank or set to bare root URL | Use `https://oraclereadinesssrc-dzxnqq.fly.dev/framer-metadata` |
-| `Invalid Framer project URL format` | Connection URL set to `https://oraclereadinesssrc-dzxnqq.fly.dev` (no path) | Add `/framer-metadata` path |
+| `missing project_link` | `connection_details` empty or `project_link` key absent | PUT the source record with `project_link` set |
+| `Invalid Framer project URL format` | URL is not `https://framer.com/projects/<Name>--<ID>` | Use the Framer project editor URL, not the published site URL |
+| `Source connection_details missing project_link` | `connection_details` object exists but `project_link` key missing | PUT source with `{connection_details:{project_link:'https://framer.com/projects/...'}}` |
 | `Failed to start ingestion: 401` | Wrong or missing Bearer token | Re-check `READINESS_TOKEN` via fly ssh |
 | `Failed to start ingestion: 403` | Source belongs to different team | Open Context Studio under `MattStocker` team, not Oracle Practice UKI |
 
