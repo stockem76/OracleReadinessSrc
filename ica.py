@@ -95,13 +95,42 @@ def _slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:60]
 
 
+def _clean(text: str) -> str:
+    """Remove characters that crash ICA's graph store (upsert_nodes).
+
+    ICA's PostgreSQL backend rejects:
+    - U+FFFD (Unicode replacement character — Oracle HTML encoding artefact)
+    - Null bytes (U+0000)
+    - Other non-printable control characters (U+0001–U+001F except tab/LF/CR)
+
+    Replaces them with a space so surrounding text stays readable.
+    """
+    if not text:
+        return text
+    # Remove null bytes and Unicode replacement character outright
+    text = text.replace("\x00", "").replace("\ufffd", " ")
+    # Remove other C0 control characters except tab (9), LF (10), CR (13)
+    text = re.sub(r"[\x01-\x08\x0b\x0c\x0e-\x1f]", " ", text)
+    # Collapse multiple spaces left by the above
+    text = re.sub(r"  +", " ", text)
+    return text.strip()
+
+
 def csv_response(rows: list[dict]) -> str:
-    """Serialise a list of row-dicts to CSV string with ICA_CSV_COLUMNS header."""
+    """Serialise a list of row-dicts to CSV string with ICA_CSV_COLUMNS header.
+
+    All string values are passed through _clean() to strip characters that
+    crash ICA's graph store (U+FFFD, null bytes, stray control characters).
+    """
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=ICA_CSV_COLUMNS, lineterminator="\n",
                             extrasaction="ignore")
     writer.writeheader()
-    writer.writerows(rows)
+    cleaned = [
+        {k: (_clean(v) if isinstance(v, str) else v) for k, v in row.items()}
+        for row in rows
+    ]
+    writer.writerows(cleaned)
     return buf.getvalue()
 
 

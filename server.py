@@ -1748,9 +1748,12 @@ async def _framer_metadata(request: Request) -> JSONResponse:
 # ICA's Framer connector validator checks for these markers in the response.
 # Real Framer-published sites serve Server: Framer/... and include __framer__ data
 # in a <script> tag. We replicate the minimum required signatures here.
+# Note: Fly.io's edge proxy rewrites the Server: header — we cannot send
+# "Server: Framer/5d364ee" from application code. Instead we use headers
+# that Fly.io passes through unchanged.
 _FRAMER_HEADERS = {
-    "Server": "Framer/5d364ee",
-    "x-powered-by": "Framer",
+    "X-Framer-Signature": "5d364ee",
+    "X-Powered-By": "Framer",
     "Cache-Control": "public, max-age=0, must-revalidate",
 }
 
