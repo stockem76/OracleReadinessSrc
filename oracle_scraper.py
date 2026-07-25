@@ -689,6 +689,84 @@ def parse_feature_detail_page(
         or _OPTIONAL_UPTAKE_RE.search(_sec("tips_considerations") or "")
     )
 
+    # -----------------------------------------------------------------------
+    # Extract feature flags from the Oracle feature summary table.
+    #
+    # Oracle detail pages contain a small 2-column summary table near the top
+    # (before the description paragraphs) with rows like:
+    #   Feature Type | Oracle-Maintained
+    #   Action       | Automatically available
+    #   Impact       | Large scale
+    #   AI           | Generative AI
+    # We scan every <table> in the page for this pattern and parse the values
+    # using the same helper functions used by the catalogue scraper.
+    # -----------------------------------------------------------------------
+
+    flags: dict = {
+        "is_ai":          False,
+        "ai_type":        None,
+        "is_redwood":     False,
+        "auto_enabled_in": None,
+        "opt_in_required": optional_uptake,  # pre-seeded from text regex above
+        "setup_required":  False,
+        "impact":         None,
+        "enablement":     None,
+    }
+
+    _SUMMARY_HEADER_RE = re.compile(
+        r"action|impact|ai type|oracle ai|redwood|auto.?enabl|feature type",
+        re.IGNORECASE,
+    )
+
+    for tbl in soup.find_all("table"):
+        rows_in_tbl = tbl.find_all("tr")
+        # Build a dict of label → value from all 2-cell rows
+        kv: dict[str, str] = {}
+        for tr in rows_in_tbl:
+            cells = tr.find_all(["td", "th"])
+            if len(cells) == 2:
+                k = cells[0].get_text(strip=True).lower()
+                v = cells[1].get_text(strip=True)
+                kv[k] = v
+
+        # Only process tables that look like a feature summary
+        combined_keys = " ".join(kv.keys())
+        if not _SUMMARY_HEADER_RE.search(combined_keys):
+            continue
+
+        for raw_key, val in kv.items():
+            if not val:
+                continue
+            k = raw_key.lower().strip()
+
+            if "action" in k or "enablement" in k:
+                parsed = _parse_enablement(val)
+                flags["enablement"]     = parsed["enablement"] or flags["enablement"]
+                if parsed["setup_required"]:
+                    flags["setup_required"] = True
+                if parsed["opt_in_required"]:
+                    flags["opt_in_required"] = True
+
+            elif "impact" in k:
+                flags["impact"] = _parse_impact(val) or flags["impact"]
+
+            elif "ai" in k:
+                parsed_ai = _parse_ai(val)
+                if parsed_ai["is_ai"]:
+                    flags["is_ai"]    = True
+                    flags["ai_type"]  = parsed_ai["ai_type"] or flags["ai_type"]
+
+            elif "redwood" in k:
+                if val.strip() and val.strip().lower() not in ("no", "false", "none", "n/a", "-"):
+                    flags["is_redwood"] = True
+
+            elif "auto" in k and "enabl" in k:
+                if val.strip() and val.strip().lower() not in ("does not expire", "n/a", "-", "no"):
+                    flags["auto_enabled_in"] = val.strip() or flags["auto_enabled_in"]
+
+        # Once we found and processed a summary table, stop looking
+        break
+
     return {
         "feature_page_url":    page_url,
         "feature_name":        feature_name,
@@ -704,6 +782,15 @@ def parse_feature_detail_page(
         "other_sections":      json.dumps(other) if other else None,
         "optional_uptake":     optional_uptake,
         "fetched_at":          time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        # Flag fields — populated from summary table when present
+        "is_ai":          flags["is_ai"],
+        "ai_type":        flags["ai_type"],
+        "is_redwood":     flags["is_redwood"],
+        "auto_enabled_in": flags["auto_enabled_in"],
+        "opt_in_required": flags["opt_in_required"],
+        "setup_required":  flags["setup_required"],
+        "impact":         flags["impact"],
+        "enablement":     flags["enablement"],
     }
 
 

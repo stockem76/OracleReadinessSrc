@@ -1,0 +1,40 @@
+# Exclude large debug/local files from Docker build context.
+# Without this the build context is ~658 MB. With it: ~2 MB.
+
+# Local SQLite copies (the real DB lives on the Fly volume at /data)
+*.db
+
+# XLSX / JSON data dumps
+*.json
+
+# Diagnostic scripts uploaded ad-hoc to the container
+diag*.py
+
+# Local copies of deployed server versions (reference only)
+deployed_server*.py
+
+# Saved HTML/text samples from debugging sessions
+framer_*.html
+framer_*.txt
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local env
+.env
+.env.*
+
+# Git history (never needed in image)
+.git/
+.gitignore
+
+# Docs (not needed at runtime)
+docs/
+*.md
+
+# Editor
+.vscode/
+.idea/
