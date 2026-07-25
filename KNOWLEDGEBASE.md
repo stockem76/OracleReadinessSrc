@@ -1,8 +1,14 @@
 # Oracle Readiness MCP — Master Knowledge Base
 
-> **Last updated:** 2026-07-25 — Post full audit + confirmed root cause fix  
-> **Status:** Server fix deployed (commit 93cd7c7). ICA source record update pending (browser console step).  
+> **Last updated:** 2026-07-25 — Full session debrief + Field Guide written
+> **Status:** Server ✅ | ICA source record `project_link` ✅ correct | Framer site ❌ blank — **5 nodes root cause**
 > **Purpose:** Single source of truth. Every dead end documented. Every fix proven.
+
+---
+
+> 📖 **New to this project or returning after a break?**
+> Read **[`docs/FIELD_GUIDE.md`](docs/FIELD_GUIDE.md)** first — it is the practical survival guide
+> written after 6+ hours of debugging, with every trap mapped and the fastest path forward.
 
 ---
 
@@ -571,30 +577,45 @@ cd "G:\My Drive\GIT_ROOT\Playground"
 
 ## 18. What Still Needs Doing
 
-### Priority 1 — Update ICA source record (browser console, ~2 minutes)
+### Current state (end of 2026-07-25 session)
 
-1. Open Context Studio: `https://contextstudio.servicesessentials.ibm.com/?teamName=MattStocker&teamId=69aaae8a8482bc71f1c4af52&tab=context`
-2. Open browser DevTools → Console
-3. Run the 4-step console script from **Section 6**
-4. Wait for ingest status to show "completed"
+| Component | Status |
+|---|---|
+| Server code (`server.py`) | ✅ Correct — `_FRAMER_PROJECT_URL` constant, all routes fixed |
+| Fly.io deployment | ✅ Running — commit d839a34 deployed |
+| ICA source record `project_link` | ✅ Already correct — `src_e157006ebcf1` has framer.com URL |
+| Framer published site content | ❌ Blank default template — root cause of 5 nodes |
+| ICA knowledge graph | ❌ 5 nodes / 4 edges (from blank crawl) |
+| `feature_details` flags | ❌ All 0 — non-blocking for basic ingest |
 
-### Priority 2 — Add 5 properties to Feature node in ICA Schema Builder
+### 🔴 Priority 1 — Upload CSVs to ICA Schema Builder (~15 min, no code changes)
+
+This is the fastest path to a populated graph. See `docs/FIELD_GUIDE.md` → Path A.
+
+Upload in this order (download from server after logging in):
+1. `releases.csv`
+2. `action-types.csv`
+3. `modules.csv`
+4. `derivation-methods.csv`
+5. `features.csv?release=26C` — 1,726 rows
+6. `actions.csv?release=26C` — 1,716 rows
+
+### 🟡 Priority 2 — Add 5 properties to Feature node (ICA Schema Builder UI)
 
 In Schema Builder → `custom:feature` → Properties:
 - `isAiFeature` (boolean), `aiType` (string), `isRedwood` (boolean), `autoEnabledIn` (string), `optInRequired` (boolean)
 - Also: set `featureCode` on `oracleFusionGraphEntity` to `required: false`
 
-### Priority 3 — Upload 6 CSVs via Schema Builder
+### 🟡 Priority 3 — Extract flags from feature detail HTML (code change, oracle_scraper.py)
 
-Use Upload Sample Data in order: releases → action-types → modules → derivation-methods → features?release=26C → actions?release=26C
+Extend `parse_feature_detail_page()` to detect Oracle HTML badge elements for `is_ai`, `is_redwood`,
+`opt_in_required` etc. Currently all 0. Non-blocking — `contextText` is rich even without flags.
 
-### Priority 4 — Extract flags from feature detail HTML (code change)
+### 🟢 Priority 4 — Add .dockerignore
 
-Extend `parse_feature_detail_page()` in `oracle_scraper.py` to extract `is_ai`, `is_redwood`, `opt_in_required` etc. from Oracle HTML badge/tag elements. Currently all 0 in `feature_details`.
-
-### Priority 5 — Add .dockerignore
-
-Add `Playground/.dockerignore` to exclude `*.db`, `diag*.py`, `deployed_server*.py`, `framer_*.html` from build context (currently 658 MB → should be ~2 MB).
+Reduce build context from 658 MB to ~2 MB by adding `Playground/.dockerignore` with:
+`*.db`, `*.json`, `diag*.py`, `deployed_server*.py`, `framer_*.html`, `framer_*.txt`,
+`__pycache__/`, `*.pyc`, `.env`, `.git/`, `readiness_*.db`
 
 ---
 
