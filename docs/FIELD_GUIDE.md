@@ -2,20 +2,20 @@
 ## Hard-Won Lessons + Complete Solution Path
 
 > **Written:** 2026-07-25 — after 6+ hours debugging why ICA ingest produced only 5 nodes  
-> **Updated:** 2026-07-25 — complete solution implemented (commit `c65fcb0`)  
+> **Updated:** 2026-07-25 — ICA upsert_nodes crash fixed (commit `c3c4db3`)
 > **Purpose:** Shortcut the next session. Every trap is mapped. Every fix is proven. Full path to resilient, repeatable ingest documented.  
 > **Companion docs:** `KNOWLEDGEBASE.md` (full reference), `CONNECTOR.md` (ICA form values), `docs/DEPLOY_CHEATSHEET.md`
 
 ---
 
-## CURRENT STATE (as of commit c65fcb0)
+## CURRENT STATE (as of commit c3c4db3)
 
 ```
-Server code:          ✅ Deployed — flag extraction from Oracle HTML active
+Server code:          ✅ Deployed — flag extraction + Unicode cleaning active
 Build context:        ✅ 36 KB (was 658 MB — .dockerignore added)
-ICA CSV endpoints:    ✅ Public (no login required) — verified working
+ICA CSV endpoints:    ✅ Public, 0 bad-character rows — verified
 ICA source record:    ✅ project_link correct (src_e157006ebcf1)
-Framer published site:❌ Still blank — but this path is ABANDONED
+Framer connector:     ❌ Crawls blank site → 5 nodes (path ABANDONED)
 ICA graph:            ❌ 5 nodes — needs CSV upload (Path A below)
 Flags in DB:          ❌ All 0 for existing rows — will populate on next deep scrape
 ```
@@ -227,6 +227,8 @@ cd "G:\My Drive\GIT_ROOT\Playground"
 | `fetch()` with relative paths from console | App interceptor downgrades to HTTP → Mixed Content block |
 | `backfill_flags_from_features()` JOIN | Feature names at different hierarchy levels — 0 matches always |
 | XLSX flags via `Feature_Summary.json` | `#UNCALCULATED` in Feature column — Excel formulas not evaluated |
+| `Server: Framer/...` response header | Fly.io edge proxy overwrites `Server:` — use `X-Framer-Signature` instead |
+| U+FFFD in CSV contextText | Crashes ICA `upsert_nodes` — Oracle HTML encoding artefacts; fixed in `c3c4db3` |
 
 ---
 
@@ -234,6 +236,7 @@ cd "G:\My Drive\GIT_ROOT\Playground"
 
 | Commit | Description |
 |---|---|
+| `c3c4db3` | fix: strip U+FFFD/null bytes from CSV — fixes ICA upsert_nodes crash |
 | `c65fcb0` | feat: extract flags from Oracle detail page summary table; add .dockerignore |
 | `7666f68` | docs: add FIELD_GUIDE.md — 6-hour session debrief |
 | `d839a34` | docs: knowledgebase update — dead ends, root causes, audit findings |
