@@ -1,0 +1,33 @@
+﻿<!doctype html>
+<!-- Made in Framer ├é┬À framer.com ├ó┬£┬¿ -->
+<!-- Published Jul 24, 2026, 6:40 PM UTC -->
+<html dir="ltr">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=1200">
+	<meta name="generator" content="Framer bee8ea6">
+	<title>My Framer Site</title>
+    <meta name="description" content="Made with Framer">
+    <meta name="framer-search-index" content="https://framerusercontent.com/sites/JalM0gqVecB86Xs3KZ0UC/searchIndex-sivAQiZk7zQB.json">
+    <link href="https://framerusercontent.com/sites/icons/default-favicon-light.v1.png" rel="icon" media="(prefers-color-scheme: light)">
+    <link href="https://framerusercontent.com/sites/icons/default-favicon-dark.v1.png" rel="icon" media="(prefers-color-scheme: dark)">
+    <link rel="apple-touch-icon" href="https://framerusercontent.com/sites/icons/default-touch-icon.v3.png">
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="My Framer Site">
+    <meta property="og:description" content="Made with Framer">
+    <!-- X -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="My Framer Site">
+    <meta name="twitter:description" content="Made with Framer">
+	
+	
+	<script>try{if(localStorage.getItem("__framer_force_showing_editorbar_since")){const n=document.createElement("link");n.rel="modulepreload";n.href="https://framer.com/edit/init.mjs";document.head.appendChild(n)}}catch(e){}</script>
+	<link rel="canonical" href="https://beige-highlight-880775.framer.app/"><meta property="og:url" content="https://beige-highlight-880775.framer.app/"><!-- Start of headStart -->
+    
+    <!-- End of headStart -->
+	
+	<style data-framer-font-css></style>
+	
+	
+	<meta name="robots" content="max-image-preview:large"><style data-framer-css-ssr-minified data-framer-components="framer-lib-cursors-host framer-shDKF">html,body,#main{box-sizing:border-box;margin:0;padding:0}:root{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}*{box-sizing:border-box;-webkit-font-smoothing:inherit}h1,h2,h3,h4,h5,h6,p,figure{margin:0}body,input,textarea,select,button{font-family:sans-serif;font-size:12px}@supports (z-index:calc(infinity)){#__framer-badge-container{--infinity:infinity}}#__framer-badge-container{pointer-events:none;width:100%;z-index:calc(var(--infinity,2147480000));justify-content:flex-end;padding:20px;display:flex;position:fixed;bottom:0}body{--framer-will-change-override:none}@supports (background:-webkit-named-image(i)) and (not (grid-template-rows:subgrid)){body{--framer-will-change-override:transform}}body{--framer-will-change-filter-override:none}@supports (background:-webkit-named-image(i)) and (not (position-area:top right)){body{--framer-will-change-filter-override:filter}}[data-framer-component-type]{position:absolute}[data-framer-component-type=Text]{cursor:inherit}[data-framer-component-text-autosized] *{white-space:pre}[data-framer-component-type=Text]>*{text-align:var(--fram
