@@ -1,6 +1,6 @@
 # Oracle Readiness MCP — Master Knowledge Base
 
-> **Last updated:** 2026-07-25 — Full session debrief + Field Guide written
+> **Last updated:** 2026-07-28 — Obsidian ↔ Open Notebook integration bug-fix session
 > **Status:** Server ✅ | ICA source record `project_link` ✅ correct | Framer site ❌ blank — **5 nodes root cause**
 > **Purpose:** Single source of truth. Every dead end documented. Every fix proven.
 
@@ -37,6 +37,7 @@
 21. [Appendix C — Database Schema](#appendix-c--database-schema)
 22. [Appendix D — The XLSX Trap](#appendix-d--the-xlsx-trap)
 23. [Appendix E — Full Audit Findings (2026-07-25)](#appendix-e--full-audit-findings-2026-07-25)
+24. [Appendix F — Obsidian ↔ Open Notebook Integration (2026-07-28)](#appendix-f--obsidian--open-notebook-integration-2026-07-28)
 
 ---
 
@@ -690,6 +691,107 @@ Columns added by `_MIGRATION_DDL` (idempotent ALTER TABLE):
 
 ### Still needed to complete ingest ⏳
 - ICA source record `project_link` field needs updating via browser console (Section 18, Priority 1)
+
+---
+
+## Appendix F — Obsidian ↔ Open Notebook Integration (2026-07-28)
+
+### Stack
+
+| Component | Detail |
+|---|---|
+| Open Notebook version | v1.14.0 |
+| Runtime | Podman compose — 2 containers (`open_notebook`, `surrealdb`) |
+| Web UI | `http://localhost:8502` |
+| REST API | `http://localhost:5055` |
+| Plugin path (live) | `G:\My Drive\DriveSyncFiles\.obsidian\plugins\obsidian-open-notebook\` |
+| Plugin source | `Playground/Playground/Obsidian-ON-Integration/` |
+| Dedup scripts | `Playground/Playground/Open-Notebook-Source-Dedup/` |
+
+---
+
+### Incident: Sync-Storm — "KPI Stage 3 notes" (HOB TIP NOTES notebook)
+
+**Symptom:** One note had **55 source copies** in the notebook (49 ghosts + 5 real + 1 surviving).
+**Root cause:** `onFileModified` had no effective debounce — the `syncDebounceMs:2000` setting existed but was never wired up. Every rapid keystroke triggered a full independent sync, creating dozens of races.
+
+**Resolution:**
+- Deleted 49 ghost copies via `source-dedup.js --fix` (0 failures) → notebook dropped from 55 to 6 sources.
+- Fixed `main.js` with per-file `_modifyTimers` debounce (see Bug #1 below).
+
+---
+
+### Data cleanup performed
+
+| Action | Detail |
+|---|---|
+| Deleted 49 ghost sources | `source-dedup.js --fix` on HOB TIP NOTES notebook |
+| Deleted stub John Burns source | `DELETE /api/sources/76y2ksv47kbwx5hb2pf0` (19-char stub) — kept `o0l2j9vgnipbusm6mkea` (13,746-char full analysis) |
+| Removed 2 dead `folderToNotebook` entries | `"ToDO List"` and `"OpenNotebook"` both pointed to non-existent notebook `5gw4ztmpeq1wa6jwcjbk`; removed from `data.json` (13 → 11 entries) |
+
+---
+
+### Bugs found and fixed in `main.js` (ContentSyncManager)
+
+> `main.js` is a minified esbuild bundle. All patches applied via `search_and_replace`. After patching, the file was copied to the live Obsidian plugin location.
+
+#### Bug #1 — CRITICAL: `onFileModified` no debounce (sync storm)
+
+**Location:** `ContentSyncManager.onFileModified`
+**Problem:** `syncDebounceMs` setting existed but was never used. Every file-change event triggered immediate sync.
+**Fix:** Added `this._modifyTimers = new Map` in constructor; `onFileModified` now uses `setTimeout` keyed per file path, cancelling any pending timer before setting a new one.
+
+#### Bug #2 — HIGH: `onFileCreated` declared non-async
+
+**Location:** `ContentSyncManager.onFileCreated`
+**Problem:** Method contained `await` expressions but was declared as a plain (non-async) function → fire-and-forget races, unhandled promise rejections.
+**Fix:** Added `async` keyword to the method declaration.
+
+#### Bug #3 — HIGH: Dead notebook mapping in `data.json`
+
+**Location:** `folderToNotebook` in `data.json`
+**Problem:** Two folder entries (`"ToDO List"`, `"OpenNotebook"`) referenced notebook ID `5gw4ztmpeq1wa6jwcjbk` which no longer existed on the server → every sync to those folders silently failed.
+**Fix:** Removed both dead entries from `data.json` directly. Added `verifySyncState` notebook health-check block that logs a warning for any `folderToNotebook` entry pointing to a non-existent notebook (so future drift is caught early).
+
+#### Bug #4 — MEDIUM: `sourceMappings` always empty on startup
+
+**Location:** `ContentSyncManager.verifySyncState`
+**Problem:** Plugin stored source ID mappings in frontmatter and in an in-memory Map (`sourceMappings`), but the Map was never rebuilt from frontmatter on startup — so `verifySyncState` and dedup tools always saw zero mappings.
+**Fix:** Added a frontmatter-rebuild pass at the top of `verifySyncState` that iterates all markdown files and repopulates `sourceMappings` from `open-notebook-source-id` frontmatter fields.
+
+#### Bug #5 — MEDIUM: `syncFile` concurrent race (same file multiple times)
+
+**Location:** `ContentSyncManager.syncFile`
+**Problem:** No per-path lock — if `syncFile` was called twice for the same path in rapid succession, two simultaneous API calls could both `POST` a new source, creating duplicates.
+**Fix:** Added `this._syncLocks = new Map` in constructor; `syncFile` acquires a per-path Promise lock using a `_lkRes` resolver pattern, serialising all calls for the same path.
+
+---
+
+### Bugs fixed in dedup scripts
+
+#### `open-notebook-dedup.js` — Keeper selection (Bug #3 equivalent)
+
+**Location:** `open-notebook-dedup.js` ~line 202
+**Problem:** Fallback sort used `updated` timestamp only — a short stub created more recently would be kept over a rich long-form analysis.
+**Fix:** Replaced timestamp sort with content-weighted sort: primary = `fullText`/`note_content` length, secondary = `insights_count`, tertiary = `updated` timestamp.
+
+#### `source-dedup.js` — `scoreCluster()` recency nudge (Bug #5 equivalent)
+
+**Location:** `source-dedup.js` `scoreCluster()` ~line 186
+**Problem:** Recency was only a final tiebreaker after score equality — a newer richer source couldn't outrank an older one with identical normalised scores.
+**Fix:** Added a recency nudge (0→0.05) derived from each source's `updated`/`created` timestamp relative to the cluster min/max range. Baked into the composite score so fresh sources get a small boost without overriding content signals. Removed the now-redundant `byDate` tiebreaker from the sort comparator.
+
+---
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `Playground/Playground/Obsidian-ON-Integration/main.js` | 6 patches: `_modifyTimers`, `_syncLocks`, async `onFileCreated`, debounced `onFileModified`, serialised `syncFile`, notebook health-check + frontmatter-rebuild in `verifySyncState` |
+| `G:\My Drive\DriveSyncFiles\.obsidian\plugins\obsidian-open-notebook\main.js` | Overwritten with patched version (live) |
+| `G:\My Drive\DriveSyncFiles\.obsidian\plugins\obsidian-open-notebook\data.json` | Removed 2 dead `folderToNotebook` entries |
+| `Playground/Playground/Obsidian-ON-Integration/open-notebook-dedup.js` | Content-weighted keeper sort |
+| `Playground/Playground/Open-Notebook-Source-Dedup/source-dedup.js` | Recency nudge in `scoreCluster()` |
 
 ---
 
