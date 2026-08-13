@@ -28,6 +28,8 @@ _DEFAULTS = {
     "active_pillars":       ["erp", "scm", "hcm", "service"],
     # Which releases to highlight / download in detail (empty = show all)
     "target_releases":      [],
+    # Log rotation: how many days of log files to retain (each day is one file)
+    "log_retention_days":   int(os.environ.get("LOG_RETENTION_DAYS", "10")),
 
     # MCP server auth
     "mcp_token":            os.environ.get("READINESS_TOKEN", ""),

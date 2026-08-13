@@ -27,8 +27,10 @@ Environment variables:
 from __future__ import annotations
 
 import asyncio
+import datetime
 import json
 import logging
+import logging.handlers
 import os
 import re
 import sys
@@ -62,14 +64,8 @@ from db import ReadinessDB
 from settings import Settings
 from auth import AuthDB
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-)
-logger = logging.getLogger("oracle_readiness_mcp")
-
 # ---------------------------------------------------------------------------
-# Config from environment
+# Config from environment  (read early — needed by logging setup)
 # ---------------------------------------------------------------------------
 
 DATA_DIR      = Path(os.environ.get("READINESS_DATA_DIR",      "/data")).resolve()
@@ -80,10 +76,51 @@ AUTOSTART     = os.environ.get("READINESS_AUTOSTART_REFRESH",  "1") != "0"
 HTTP_HOST     = os.environ.get("READINESS_HTTP_HOST",           "0.0.0.0")
 HTTP_PORT     = int(os.environ.get("READINESS_HTTP_PORT",       "8080"))
 AUTH_TOKEN    = os.environ.get("READINESS_TOKEN",               "")
+LOG_RETENTION_DAYS = int(os.environ.get("LOG_RETENTION_DAYS",   "10"))
 
-PRODUCT_NAMES = tuple(PRODUCTS.keys())
+PRODUCT_NAMES   = tuple(PRODUCTS.keys())
 DEFAULT_PILLARS = ("erp", "scm", "hcm", "service")
 MAX_INLINE_CONTENT = 15
+
+# ---------------------------------------------------------------------------
+# Logging setup — console + daily rotating file
+# ---------------------------------------------------------------------------
+
+LOG_FMT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
+
+def _setup_logging() -> None:
+    """Configure root logger: always-on console handler + daily file rotation."""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    logs_dir = DATA_DIR / "logs"
+    logs_dir.mkdir(exist_ok=True)
+
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+
+    # Console handler (already added by basicConfig in earlier versions)
+    if not any(isinstance(h, logging.StreamHandler) and
+               not isinstance(h, logging.FileHandler) for h in root.handlers):
+        ch = logging.StreamHandler(sys.stderr)
+        ch.setFormatter(logging.Formatter(LOG_FMT))
+        root.addHandler(ch)
+
+    # Daily rotating file — app_YYYY-MM-DD.log, keep LOG_RETENTION_DAYS
+    log_file = logs_dir / "app.log"
+    rfh = logging.handlers.TimedRotatingFileHandler(
+        filename=str(log_file),
+        when="midnight",
+        interval=1,
+        backupCount=LOG_RETENTION_DAYS,
+        encoding="utf-8",
+        utc=False,
+    )
+    # Use datestamp suffix so files are named app_YYYY-MM-DD.log
+    rfh.suffix = "%Y-%m-%d"
+    rfh.setFormatter(logging.Formatter(LOG_FMT))
+    root.addHandler(rfh)
+
+_setup_logging()
+logger = logging.getLogger("oracle_readiness_mcp")
 
 # ---------------------------------------------------------------------------
 # Application state
@@ -119,36 +156,61 @@ class AppState:
 
     async def _do_refresh(self, products: Optional[list[str]]) -> list[dict]:
         targets = products or self.settings.active_pillars or list(PRODUCTS.keys())
+        n_targets = len(targets)
+        logger.info("=== Refresh started: %d pillar(s) to fetch: %s ===",
+                    n_targets, ", ".join(t.upper() for t in targets))
         results = []
         async with httpx.AsyncClient() as client:
-            for p in targets:
+            for idx, p in enumerate(targets, 1):
+                logger.info("[%d/%d] Fetching pillar: %s …", idx, n_targets, p.upper())
                 try:
                     features, used_url = await fetch_product(client, p)
+                    # Log per-release breakdown
+                    by_release: dict[str, int] = {}
+                    for f in features:
+                        by_release[f.release] = by_release.get(f.release, 0) + 1
+                    for rel, cnt in sorted(by_release.items()):
+                        logger.info("  [%s] %s: %d items collected", p.upper(), rel, cnt)
                     count = await self.db.upsert_features(features)
                     await self.db.log_crawl(p, used_url, count)
+                    logger.info("[%d/%d] ✓ %s complete — %d features upserted from %s",
+                                idx, n_targets, p.upper(), count, used_url)
                     results.append({"product": p, "ok": True, "total_entries": count, "source_url": used_url})
                 except Exception as e:
-                    logger.warning("Refresh failed for %s: %s", p, e)
+                    logger.warning("[%d/%d] ✗ %s FAILED: %s", idx, n_targets, p.upper(), e)
                     await self.db.log_crawl(p, PRODUCTS[p], 0, ok=False, error=str(e))
                     results.append({"product": p, "ok": False, "error": str(e)})
                 await asyncio.sleep(1.0)  # be polite to Oracle
 
             # Deep-scrape feature detail pages (steps to enable, tips, etc.)
-            # Only scrape releases that are in the target list (settings) or all if unset
             target_releases = (
                 [r.upper() for r in self.settings.target_releases]
                 if self.settings.target_releases else None
             )
-            for p in [t for t in targets if t != "news"]:
+            deep_targets = [t for t in targets if t != "news"]
+            if deep_targets:
+                logger.info("--- Deep-scrape phase: %d pillar(s) ---", len(deep_targets))
+            for p in deep_targets:
+                logger.info("Deep-scrape starting: %s (releases filter: %s)",
+                            p.upper(), target_releases or "all")
                 try:
                     pages, feats = await self._deep_scrape_product(client, p, target_releases)
-                    logger.info("Deep-scrape %s: %d pages, %d feature details", p, pages, feats)
+                    logger.info("Deep-scrape %s complete: %d module pages, %d detail records",
+                                p.upper(), pages, feats)
                 except Exception as e:
-                    logger.warning("Deep-scrape failed for %s: %s", p, e)
+                    logger.warning("Deep-scrape failed for %s: %s", p.upper(), e)
                 await asyncio.sleep(0.5)
+
+        ok_count  = sum(1 for r in results if r["ok"])
+        err_count = len(results) - ok_count
+        total_feats = sum(r.get("total_entries", 0) for r in results if r["ok"])
+        logger.info("=== Refresh complete: %d/%d pillars OK, %d errors, %d total features ===",
+                    ok_count, len(results), err_count, total_feats)
 
         # Auto-push to GitHub if configured
         if self.settings.github_auto_push:
+            logger.info("Auto-push to GitHub: %s → %s",
+                        self.settings.github_repo, self.settings.github_file_path)
             try:
                 await _github_push(
                     token=self.settings.github_token,
@@ -171,7 +233,6 @@ class AppState:
         releases: Optional[list[str]] = None,
     ) -> tuple[int, int]:
         """Fetch all module index pages for a product and deep-scrape feature details."""
-        import sqlite3 as _sq
         rows = self.db._execute(
             """
             SELECT DISTINCT html_url, module, release, product_family
@@ -187,20 +248,33 @@ class AppState:
         if releases:
             rows = [r for r in rows if r["release"].upper() in releases]
 
+        n_pages = len(rows)
+        logger.info("  Deep-scrape %s: %d module pages queued%s",
+                    product.upper(), n_pages,
+                    f" (filtered to {releases})" if releases else "")
+
         pages = 0
         total_feats = 0
-        for row in rows:
-            dets = await fetch_feature_details_for_module(
-                client,
-                row["html_url"],
-                row["release"],
-                row["product_family"],
-                row["module"],
-            )
-            for d in dets:
-                await self.db.upsert_feature_detail(d)
-            pages += 1
-            total_feats += len(dets)
+        for i, row in enumerate(rows, 1):
+            logger.info("  [%d/%d] Scraping %s › %s › %s",
+                        i, n_pages, row["release"], product.upper(), row["module"])
+            try:
+                dets = await fetch_feature_details_for_module(
+                    client,
+                    row["html_url"],
+                    row["release"],
+                    row["product_family"],
+                    row["module"],
+                )
+                for d in dets:
+                    await self.db.upsert_feature_detail(d)
+                pages += 1
+                total_feats += len(dets)
+                logger.info("  [%d/%d] ✓ %s › %s → %d detail record(s)",
+                            i, n_pages, row["release"], row["module"], len(dets))
+            except Exception as e:
+                logger.warning("  [%d/%d] ✗ failed scraping %s › %s: %s",
+                               i, n_pages, row["release"], row["module"], e)
             await asyncio.sleep(0.2)
 
         return pages, total_feats
@@ -2069,17 +2143,18 @@ async def _api_releases(request: Request) -> JSONResponse:
     """GET /api/releases — all releases with per-pillar feature counts and stats."""
     target = state.settings.get("target_releases") or []
     rows = state.db._execute("""
-        SELECT release, product_family,
+        SELECT release,
+               LOWER(product_family) as product_family,
                COUNT(*) as features,
                COUNT(DISTINCT module) as modules,
-               SUM(CASE WHEN impact LIKE '%Large%' THEN 1 ELSE 0 END) as large_scale,
+               SUM(CASE WHEN impact LIKE '%Large%' OR impact LIKE '%large%' THEN 1 ELSE 0 END) as large_scale,
                SUM(CASE WHEN setup_required=1 THEN 1 ELSE 0 END) as setup_required,
                SUM(CASE WHEN opt_in_required=1 THEN 1 ELSE 0 END) as opt_in,
                SUM(CASE WHEN is_ai=1 THEN 1 ELSE 0 END) as ai,
                SUM(CASE WHEN is_redwood=1 THEN 1 ELSE 0 END) as redwood
         FROM features WHERE release != 'Unknown'
-        GROUP BY release, product_family
-        ORDER BY release DESC, product_family
+        GROUP BY release, LOWER(product_family)
+        ORDER BY release DESC, LOWER(product_family)
     """).fetchall()
 
     # Group by release
@@ -2111,22 +2186,26 @@ async def _api_releases(request: Request) -> JSONResponse:
 
 
 async def _api_release_pillar(request: Request) -> JSONResponse:
-    """GET /api/releases/{release}/{pillar} — modules breakdown for a release+pillar."""
+    """GET /api/releases/{release}/{pillar} — modules breakdown for a release+pillar.
+
+    Task 4 fix: product_family stored in DB may be mixed-case (e.g. 'HCM', 'hcm').
+    Use LOWER() on both sides to ensure case-insensitive matching.
+    """
     release = request.path_params["release"].upper()
     pillar  = request.path_params["pillar"].lower()
 
     rows = state.db._execute("""
         SELECT module,
                COUNT(*) as features,
-               SUM(CASE WHEN impact LIKE '%Large%' THEN 1 ELSE 0 END) as large_scale,
-               SUM(CASE WHEN impact LIKE '%Small%' THEN 1 ELSE 0 END) as small_scale,
+               SUM(CASE WHEN impact LIKE '%Large%' OR impact LIKE '%large%' THEN 1 ELSE 0 END) as large_scale,
+               SUM(CASE WHEN impact LIKE '%Small%' OR impact LIKE '%small%' THEN 1 ELSE 0 END) as small_scale,
                SUM(CASE WHEN setup_required=1 THEN 1 ELSE 0 END) as setup_required,
                SUM(CASE WHEN opt_in_required=1 THEN 1 ELSE 0 END) as opt_in,
                SUM(CASE WHEN is_ai=1 THEN 1 ELSE 0 END) as ai,
                SUM(CASE WHEN is_redwood=1 THEN 1 ELSE 0 END) as redwood,
-               SUM(CASE WHEN auto_enabled_in IS NOT NULL THEN 1 ELSE 0 END) as auto_enabled
+               SUM(CASE WHEN auto_enabled_in IS NOT NULL AND auto_enabled_in != '' THEN 1 ELSE 0 END) as auto_enabled
         FROM features
-        WHERE UPPER(release)=? AND product_family=?
+        WHERE UPPER(release)=? AND LOWER(product_family)=?
         GROUP BY module
         ORDER BY features DESC, module
     """, (release, pillar)).fetchall()
@@ -2141,17 +2220,26 @@ async def _api_release_pillar(request: Request) -> JSONResponse:
         "label":   PRODUCT_LABELS.get(pillar, pillar),
         "modules": [dict(r) for r in rows],
         "totals": {
-            "features":      sum(r["features"] for r in rows),
-            "large_scale":   sum(r["large_scale"] or 0 for r in rows),
-            "setup_required":sum(r["setup_required"] or 0 for r in rows),
-            "opt_in":        sum(r["opt_in"] or 0 for r in rows),
-            "ai":            sum(r["ai"] or 0 for r in rows),
+            "features":       sum(r["features"] for r in rows),
+            "large_scale":    sum(r["large_scale"]    or 0 for r in rows),
+            "small_scale":    sum(r["small_scale"]    or 0 for r in rows),
+            "setup_required": sum(r["setup_required"] or 0 for r in rows),
+            "opt_in":         sum(r["opt_in"]         or 0 for r in rows),
+            "ai":             sum(r["ai"]             or 0 for r in rows),
+            "redwood":        sum(r["redwood"]        or 0 for r in rows),
+            "auto_enabled":   sum(r["auto_enabled"]   or 0 for r in rows),
         },
     })
 
 
 async def _api_release_module_features(request: Request) -> JSONResponse:
-    """GET /api/releases/{release}/{pillar}/{module} — all features for a module."""
+    """GET /api/releases/{release}/{pillar}/{module} — all features for a module.
+
+    Task 4 fix:
+    - Use LOWER() on product_family for case-insensitive match.
+    - Return all flag columns so the UI can correctly display Large/Setup/Opt-In/AI sections.
+    - Also return module-level summary counts for the five detail sections.
+    """
     release = request.path_params["release"].upper()
     pillar  = request.path_params["pillar"].lower()
     module  = request.path_params["module"]
@@ -2159,17 +2247,84 @@ async def _api_release_module_features(request: Request) -> JSONResponse:
     rows = state.db._execute("""
         SELECT feature_name, description, impact, enablement,
                auto_enabled_in, is_redwood, is_ai, ai_type,
-               setup_required, opt_in_required, html_url, pdf_url
+               setup_required, opt_in_required, html_url, pdf_url,
+               product, source_url, retrieved_at
         FROM features
-        WHERE UPPER(release)=? AND product_family=? AND module=?
-        ORDER BY feature_name
+        WHERE UPPER(release)=? AND LOWER(product_family)=? AND module=?
+        ORDER BY
+            CASE WHEN impact LIKE '%Large%' OR impact LIKE '%large%' THEN 0 ELSE 1 END,
+            feature_name
     """, (release, pillar, module)).fetchall()
+
+    features = [dict(r) for r in rows]
+
+    # Section counts — used by UI to populate the five detail section tabs
+    def _count(pred):
+        return sum(1 for f in features if pred(f))
+
+    summary = {
+        "total":         len(features),
+        "large_scale":   _count(lambda f: "large" in (f.get("impact") or "").lower()),
+        "small_scale":   _count(lambda f: "small" in (f.get("impact") or "").lower()),
+        "setup_required":_count(lambda f: f.get("setup_required")),
+        "opt_in":        _count(lambda f: f.get("opt_in_required")),
+        "ai":            _count(lambda f: f.get("is_ai")),
+        "redwood":       _count(lambda f: f.get("is_redwood")),
+        "auto_enabled":  _count(lambda f: f.get("auto_enabled_in")),
+    }
 
     return JSONResponse({
         "release": release, "pillar": pillar, "module": module,
-        "features": [dict(r) for r in rows],
-        "total": len(rows),
+        "features": features,
+        "summary":  summary,
+        "total":    len(features),
     })
+
+
+async def _api_logs_list(request: Request) -> JSONResponse:
+    """GET /api/logs — list available log days in descending order."""
+    logs_dir = DATA_DIR / "logs"
+    days: list[str] = []
+    if logs_dir.exists():
+        # Current log file maps to today
+        today = datetime.date.today().isoformat()
+        current = logs_dir / "app.log"
+        if current.exists() and current.stat().st_size > 0:
+            days.append(today)
+        # Rotated files: app.log.YYYY-MM-DD
+        for f in sorted(logs_dir.iterdir(), reverse=True):
+            if f.name.startswith("app.log.") and len(f.name) == len("app.log.YYYY-MM-DD"):
+                date_str = f.name[len("app.log."):]
+                if date_str != today:   # avoid duplicate for today if rotation just happened
+                    days.append(date_str)
+    return JSONResponse({"days": days})
+
+
+async def _api_logs_day(request: Request) -> JSONResponse:
+    """GET /api/logs/{date} — return log content for a given YYYY-MM-DD date."""
+    date_str = request.path_params["date"]
+    # Basic validation
+    try:
+        datetime.date.fromisoformat(date_str)
+    except ValueError:
+        return JSONResponse({"ok": False, "error": "Invalid date"}, status_code=400)
+
+    logs_dir = DATA_DIR / "logs"
+    today = datetime.date.today().isoformat()
+
+    # Determine which file to read
+    if date_str == today:
+        log_path = logs_dir / "app.log"
+    else:
+        log_path = logs_dir / f"app.log.{date_str}"
+
+    if not log_path.exists():
+        return JSONResponse({"ok": False, "error": f"No log for {date_str}"}, status_code=404)
+
+    MAX_LOG_BYTES = 1_000_000  # 1 MB cap per day
+    content = log_path.read_bytes()[-MAX_LOG_BYTES:].decode("utf-8", errors="replace")
+    lines   = content.splitlines()
+    return JSONResponse({"ok": True, "date": date_str, "lines": lines, "total_lines": len(lines)})
 
 
 async def _api_save_target_releases(request: Request) -> JSONResponse:
@@ -2338,6 +2493,9 @@ def _build_starlette_app() -> Starlette:
         Route("/api/releases/targets",      _api_save_target_releases,     methods=["POST"]),
         Route("/api/releases/{release}/{pillar}/{module:path}", _api_release_module_features, methods=["GET"]),
         Route("/api/releases/{release}/{pillar}", _api_release_pillar,     methods=["GET"]),
+        # Log file access (Task 2)
+        Route("/api/logs",                  _api_logs_list,                methods=["GET"]),
+        Route("/api/logs/{date}",           _api_logs_day,                 methods=["GET"]),
         Route("/api/test-github",           _api_test_github,              methods=["POST"]),
         Route("/api/push-github",           _api_push_github,              methods=["POST"]),
         Route("/api/test-oracle",           _api_test_oracle,              methods=["GET"]),

@@ -100,8 +100,10 @@ tr:last-child td{border-bottom:none}
 /* spinner */
 @keyframes spin{to{transform:rotate(360deg)}}
 .spin{animation:spin .7s linear infinite;display:inline-block}
-/* log */
+/* log viewer */
 .log-entry{font-size:12px;font-family:ui-monospace,monospace;padding:3px 0;color:#57606a;border-bottom:1px solid #f5f5f5}
+.log-viewer{font-family:ui-monospace,"Cascadia Mono","Courier New",monospace;font-size:11.5px;line-height:1.5;white-space:pre-wrap;word-break:break-all;background:#0f1117;color:#c8d3e0;border-radius:6px;padding:14px 16px;max-height:70vh;overflow-y:auto;border:1px solid #2d3f55}
+.log-line-error{color:#ff6b6b}.log-line-warn{color:#ffd166}.log-line-info{color:#c8d3e0}.log-line-debug{color:#6b7a8d}
 /* user table actions */
 .action-group{display:flex;gap:6px;flex-wrap:wrap}
 /* audit action chips */
@@ -166,6 +168,10 @@ tr:last-child td{border-bottom:none}
       <div class="nav-item" data-panel="mcp">
         <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M5.5 2a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-.5.5H2a.5.5 0 0 1-.5-.5v-4A.5.5 0 0 1 2 2h3.5zM2 9h3.5a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-.5.5H2a.5.5 0 0 1-.5-.5v-4A.5.5 0 0 1 2 9zm7-7h3.5a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-.5.5H9a.5.5 0 0 1-.5-.5v-4A.5.5 0 0 1 9 2zm0 7h3.5a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-.5.5H9a.5.5 0 0 1-.5-.5v-4A.5.5 0 0 1 9 9z"/></svg>
         MCP Server
+      </div>
+      <div class="nav-item" data-panel="logs">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M5 3a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1H5zm0 2.5a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1H5zm0 2.5a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1H5z"/><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2zm10-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1z"/></svg>
+        Application Logs
       </div>
       <!-- Admin only -->
       <div class="nav-item admin-only" data-panel="users">
@@ -400,6 +406,13 @@ tr:last-child td{border-bottom:none}
             <span class="card-title" id="feature-detail-title">Features</span>
             <button class="btn btn-sm btn-secondary" onclick="closeFeatures()">✕ Close</button>
           </div>
+          <div style="padding:8px 16px 0;display:flex;gap:6px;align-items:center;flex-wrap:wrap" id="feature-filter-bar">
+            <button class="btn btn-sm btn-primary feature-filter-btn" data-filter="all" onclick="setFeatureFilter('all')">All <span id="fcount-all" class="badge badge-blue" style="margin-left:4px"></span></button>
+            <button class="btn btn-sm btn-secondary feature-filter-btn" data-filter="large" onclick="setFeatureFilter('large')">Large <span id="fcount-large" class="badge badge-red" style="margin-left:4px"></span></button>
+            <button class="btn btn-sm btn-secondary feature-filter-btn" data-filter="setup" onclick="setFeatureFilter('setup')">Setup <span id="fcount-setup" class="badge badge-yellow" style="margin-left:4px"></span></button>
+            <button class="btn btn-sm btn-secondary feature-filter-btn" data-filter="optin" onclick="setFeatureFilter('optin')">Opt-In <span id="fcount-optin" class="badge badge-gray" style="margin-left:4px"></span></button>
+            <button class="btn btn-sm btn-secondary feature-filter-btn" data-filter="ai" onclick="setFeatureFilter('ai')">AI <span id="fcount-ai" class="badge badge-blue" style="margin-left:4px"></span></button>
+          </div>
           <div class="card-body" style="padding:0">
             <table><thead><tr><th>Feature</th><th>Impact</th><th>Enablement</th><th>Flags</th><th>Link</th></tr></thead>
             <tbody id="feature-detail-body"></tbody></table>
@@ -490,6 +503,28 @@ tr:last-child td{border-bottom:none}
         </div>
       </div>
 
+      <!-- ── Application Logs ── -->
+      <div class="panel" id="panel-logs">
+        <div class="card">
+          <div class="card-head">
+            <span class="card-title">Application Logs</span>
+            <div style="display:flex;align-items:center;gap:10px">
+              <label style="font-size:12px;font-weight:600;color:#57606a;margin:0;text-transform:uppercase;letter-spacing:.03em">Day</label>
+              <select id="log-day-select" onchange="loadLogDay(this.value)" style="width:160px;margin:0">
+                <option value="">— select day —</option>
+              </select>
+              <button class="btn btn-sm btn-secondary" onclick="refreshLogDays()">↻</button>
+              <span id="log-line-count" style="font-size:12px;color:#57606a"></span>
+            </div>
+          </div>
+          <div class="card-body" style="padding:12px 16px">
+            <div id="log-viewer" class="log-viewer" style="min-height:200px">
+              <span style="color:#4a6580;font-style:italic">Select a day to view logs.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div><!-- /content -->
   </div><!-- /main -->
 </div><!-- /shell -->
@@ -543,6 +578,7 @@ async function doLogin() {
       setInterval(loadStatus, 60_000);
       setupReleasesLazyLoad();
       setupAuditLazyLoad();
+      setupLogsLazyLoad();
     } else {
       err.textContent = data.error || 'Login failed.';
       err.style.display = 'block';
@@ -589,6 +625,7 @@ function applyRole() {
         setInterval(loadStatus, 60_000);
         setupReleasesLazyLoad();
         setupAuditLazyLoad();
+        setupLogsLazyLoad();
         return;
       }
     }
@@ -819,7 +856,7 @@ async function loadReleases() {
     for (const [pf, ps] of Object.entries(rel.pillars)) {
       tbody.innerHTML += `<tr style="${rel.is_target?'background:#f0f7ff':''};cursor:pointer" onclick="drillIntoPillar('${rel.release}','${pf}')">
         <td></td><td><span style="font-weight:600;font-size:12px">${PILLAR_LABELS[pf]||pf.toUpperCase()}</span></td>
-        <td style="color:#57606a;font-size:12px">${ps.modules}</td>
+        <td style="color:#57606a;font-size:12px"><a href="#" style="color:#3b82d4;text-decoration:none" title="Click to drill into modules" onclick="event.stopPropagation();drillIntoPillar('${rel.release}','${pf}');return false">${ps.modules}</a></td>
         <td style="text-align:right">${ps.features}</td>
         <td style="text-align:right">${ps.large_scale?`<span class="badge badge-red">${ps.large_scale}</span>`:'<span style="color:#ccc">–</span>'}</td>
         <td style="text-align:right">${ps.setup_required?`<span class="badge badge-yellow">${ps.setup_required}</span>`:'<span style="color:#ccc">–</span>'}</td>
@@ -853,6 +890,55 @@ async function drillIntoPillar(release, pillar) {
     </tr>`;
   }
 }
+let _featureRows = [];   // cache all rendered row HTML + filter tags
+let _featureFilter = 'all';
+
+function _featureRowHtml(f) {
+  const flags=[];
+  if(f.is_ai) flags.push(`<span class="badge badge-blue">${f.ai_type||'AI'}</span>`);
+  if(f.is_redwood) flags.push('<span class="badge badge-gray">Redwood</span>');
+  if(f.auto_enabled_in) flags.push(`<span class="badge badge-yellow">Auto→${f.auto_enabled_in}</span>`);
+  const imp=!f.impact?'–':f.impact.toLowerCase().includes('large')?'<span class="badge badge-red">Large</span>':f.impact.toLowerCase().includes('small')?'<span class="badge badge-green">Small</span>':`<span class="badge badge-gray">${f.impact}</span>`;
+  const enab=[];
+  if(f.setup_required) enab.push('<span class="badge badge-yellow">Setup</span>');
+  if(f.opt_in_required) enab.push('<span class="badge badge-gray">Opt-In</span>');
+  if(!enab.length&&f.enablement) enab.push(`<span style="color:#57606a;font-size:11px">${f.enablement}</span>`);
+  const link=f.html_url?`<a href="${f.html_url}" target="_blank" style="font-size:11px">HTML ↗</a>`:f.pdf_url?`<a href="${f.pdf_url}" target="_blank" style="font-size:11px">PDF ↗</a>`:'–';
+  return `<tr>
+    <td><div style="font-weight:600;font-size:13px">${f.feature_name}</div>${f.description?`<div style="font-size:11px;color:#57606a;margin-top:2px">${f.description.substring(0,160)}${f.description.length>160?'…':''}</div>`:''}</td>
+    <td style="white-space:nowrap">${imp}</td>
+    <td style="white-space:nowrap">${enab.join(' ')||'–'}</td>
+    <td style="white-space:nowrap">${flags.join(' ')||'–'}</td>
+    <td>${link}</td>
+  </tr>`;
+}
+
+function _featureMatchesFilter(f, filter) {
+  if (filter === 'all')   return true;
+  if (filter === 'large') return f.impact && f.impact.toLowerCase().includes('large');
+  if (filter === 'setup') return !!f.setup_required;
+  if (filter === 'optin') return !!f.opt_in_required;
+  if (filter === 'ai')    return !!f.is_ai;
+  return true;
+}
+
+function setFeatureFilter(filter) {
+  _featureFilter = filter;
+  // Update button styles
+  document.querySelectorAll('.feature-filter-btn').forEach(btn => {
+    const active = btn.dataset.filter === filter;
+    btn.className = 'btn btn-sm ' + (active ? 'btn-primary' : 'btn-secondary') + ' feature-filter-btn';
+  });
+  // Re-render visible rows
+  const tbody = document.getElementById('feature-detail-body');
+  const visible = _featureRows.filter(r => _featureMatchesFilter(r.f, filter));
+  if (!visible.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="color:#57606a;text-align:center;padding:16px">No features match this filter.</td></tr>`;
+  } else {
+    tbody.innerHTML = visible.map(r => r.html).join('');
+  }
+}
+
 async function drillIntoModule(release, pillar, module) {
   const card=document.getElementById('feature-detail-card');
   card.style.display='block';
@@ -860,28 +946,25 @@ async function drillIntoModule(release, pillar, module) {
   document.getElementById('feature-detail-title').textContent=`${release} › ${PILLAR_LABELS[pillar]||pillar} › ${module}`;
   const tbody=document.getElementById('feature-detail-body');
   tbody.innerHTML='<tr><td colspan="5" style="color:#57606a;text-align:center;padding:16px">Loading…</td></tr>';
+  // Reset filter to "all" on each new module
+  _featureFilter = 'all';
+  document.querySelectorAll('.feature-filter-btn').forEach(btn => {
+    btn.className = 'btn btn-sm ' + (btn.dataset.filter === 'all' ? 'btn-primary' : 'btn-secondary') + ' feature-filter-btn';
+  });
   const data = await api(`/api/releases/${release}/${pillar}/${encodeURIComponent(module)}`);
   tbody.innerHTML = '';
   if (!data.features?.length) { tbody.innerHTML='<tr><td colspan="5" style="color:#57606a;text-align:center;padding:16px">No features found.</td></tr>'; return; }
-  for (const f of data.features) {
-    const flags=[];
-    if(f.is_ai) flags.push(`<span class="badge badge-blue">${f.ai_type||'AI'}</span>`);
-    if(f.is_redwood) flags.push('<span class="badge badge-gray">Redwood</span>');
-    if(f.auto_enabled_in) flags.push(`<span class="badge badge-yellow">Auto→${f.auto_enabled_in}</span>`);
-    const imp=!f.impact?'–':f.impact.toLowerCase().includes('large')?'<span class="badge badge-red">Large</span>':f.impact.toLowerCase().includes('small')?'<span class="badge badge-green">Small</span>':`<span class="badge badge-gray">${f.impact}</span>`;
-    const enab=[];
-    if(f.setup_required) enab.push('<span class="badge badge-yellow">Setup</span>');
-    if(f.opt_in_required) enab.push('<span class="badge badge-gray">Opt-In</span>');
-    if(!enab.length&&f.enablement) enab.push(`<span style="color:#57606a;font-size:11px">${f.enablement}</span>`);
-    const link=f.html_url?`<a href="${f.html_url}" target="_blank" style="font-size:11px">HTML ↗</a>`:f.pdf_url?`<a href="${f.pdf_url}" target="_blank" style="font-size:11px">PDF ↗</a>`:'–';
-    tbody.innerHTML += `<tr>
-      <td><div style="font-weight:600;font-size:13px">${f.feature_name}</div>${f.description?`<div style="font-size:11px;color:#57606a;margin-top:2px">${f.description.substring(0,160)}${f.description.length>160?'…':''}</div>`:''}</td>
-      <td style="white-space:nowrap">${imp}</td>
-      <td style="white-space:nowrap">${enab.join(' ')||'–'}</td>
-      <td style="white-space:nowrap">${flags.join(' ')||'–'}</td>
-      <td>${link}</td>
-    </tr>`;
-  }
+  // Cache rows with their raw feature data for client-side filtering
+  _featureRows = data.features.map(f => ({ f, html: _featureRowHtml(f) }));
+  // Populate filter bar counts from summary (or count ourselves)
+  const s = data.summary || {};
+  document.getElementById('fcount-all').textContent   = data.total || _featureRows.length;
+  document.getElementById('fcount-large').textContent = s.large_scale  || _featureRows.filter(r=>r.f.impact&&r.f.impact.toLowerCase().includes('large')).length || '';
+  document.getElementById('fcount-setup').textContent = s.setup_required || _featureRows.filter(r=>r.f.setup_required).length || '';
+  document.getElementById('fcount-optin').textContent = s.opt_in         || _featureRows.filter(r=>r.f.opt_in_required).length || '';
+  document.getElementById('fcount-ai').textContent    = s.ai             || _featureRows.filter(r=>r.f.is_ai).length || '';
+  // Render all rows (filter is "all")
+  tbody.innerHTML = _featureRows.map(r => r.html).join('');
 }
 function closeDrill(){document.getElementById('module-drill-card').style.display='none';document.getElementById('feature-detail-card').style.display='none';}
 function closeFeatures(){document.getElementById('feature-detail-card').style.display='none';}
@@ -977,6 +1060,65 @@ function setupAuditLazyLoad() {
   let loaded=false;
   document.querySelectorAll('.nav-item[data-panel="audit"]').forEach(item=>{
     item.addEventListener('click',async()=>{ if(!loaded){loaded=true; await loadAuditLog();} });
+  });
+}
+
+// ── Application Logs ────────────────────────────────────────────────────────
+async function refreshLogDays() {
+  const sel = document.getElementById('log-day-select');
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">— select day —</option>';
+  const data = await api('/api/logs');
+  for (const day of (data.days||[])) {
+    const opt = document.createElement('option');
+    opt.value = day;
+    opt.textContent = day;
+    sel.appendChild(opt);
+  }
+  // Restore previous selection if still available, else auto-select newest day
+  if (prev && [...sel.options].some(o => o.value === prev)) {
+    sel.value = prev;
+  } else if (data.days?.length) {
+    sel.value = data.days[0];
+    await loadLogDay(data.days[0]);
+  }
+}
+
+async function loadLogDay(date) {
+  if (!date) return;
+  const viewer = document.getElementById('log-viewer');
+  const counter = document.getElementById('log-line-count');
+  viewer.innerHTML = '<span style="color:#4a6580;font-style:italic">Loading…</span>';
+  counter.textContent = '';
+  const data = await api(`/api/logs/${date}`);
+  if (!data.ok) {
+    viewer.innerHTML = `<span style="color:#ef4444">Error: ${data.error||'Failed to load log.'}</span>`;
+    return;
+  }
+  const lines = data.lines || [];
+  counter.textContent = `${lines.length.toLocaleString()} lines`;
+  if (!lines.length) {
+    viewer.innerHTML = '<span style="color:#4a6580;font-style:italic">No log entries for this day.</span>';
+    return;
+  }
+  viewer.innerHTML = lines.map(line => {
+    const esc = line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    let cls = 'log-line-info';
+    if (/\bERROR\b|\bCRITICAL\b|\bERROR:/i.test(line))   cls = 'log-line-error';
+    else if (/\bWARN(ING)?\b|\bWARN:/i.test(line))        cls = 'log-line-warn';
+    else if (/\bDEBUG\b|\bDEBUG:/i.test(line))            cls = 'log-line-debug';
+    return `<div class="log-line ${cls}">${esc}</div>`;
+  }).join('');
+  // Scroll to bottom so newest entries are visible
+  viewer.scrollTop = viewer.scrollHeight;
+}
+
+function setupLogsLazyLoad() {
+  let loaded = false;
+  document.querySelectorAll('.nav-item[data-panel="logs"]').forEach(item => {
+    item.addEventListener('click', async () => {
+      if (!loaded) { loaded = true; await refreshLogDays(); }
+    });
   });
 }
 </script>
