@@ -183,7 +183,22 @@ class AppState:
                 await asyncio.sleep(1.0)  # be polite to Oracle
 
             # Deep-scrape feature detail pages (steps to enable, tips, etc.)
-            target_releases = (
+            #
+            # target_releases (from settings UI) normally restricts the deep-scrape
+            # to a small set of recent releases so we don't re-crawl thousands of old
+            # feature pages on every 6-hour cycle.
+            #
+            # However, if a release has NO feature_details rows at all for a given
+            # pillar, it has never been deep-scraped and must be included regardless
+            # of the target_releases filter — otherwise those releases stay permanently
+            # empty even though Oracle publishes full feature pages for them.
+            #
+            # Precedence:
+            #   1. If target_releases is empty/None → scrape all releases (no filter).
+            #   2. If target_releases is set → scrape those releases PLUS any releases
+            #      that have zero feature_details rows for the pillar being scraped
+            #      (i.e. never-before-scraped releases).
+            configured_target_releases = (
                 [r.upper() for r in self.settings.target_releases]
                 if self.settings.target_releases else None
             )
@@ -191,10 +206,38 @@ class AppState:
             if deep_targets:
                 logger.info("--- Deep-scrape phase: %d pillar(s) ---", len(deep_targets))
             for p in deep_targets:
+                # Determine effective release filter for this pillar
+                if not configured_target_releases:
+                    effective_releases: Optional[list[str]] = None  # scrape all
+                else:
+                    # Find releases that have stub rows in features but zero
+                    # feature_details rows for this pillar — never scraped yet.
+                    never_scraped = self.db._execute(
+                        """
+                        SELECT DISTINCT f.release
+                        FROM features f
+                        WHERE LOWER(f.product_family) = LOWER(?)
+                          AND f.html_url LIKE '%index.html'
+                          AND NOT EXISTS (
+                              SELECT 1 FROM feature_details fd
+                              WHERE UPPER(fd.release) = UPPER(f.release)
+                                AND LOWER(fd.product_family) = LOWER(f.product_family)
+                          )
+                        """,
+                        (p,),
+                    ).fetchall()
+                    never_scraped_rels = [r["release"].upper() for r in never_scraped]
+                    if never_scraped_rels:
+                        logger.info(
+                            "  [%s] Adding %d never-scraped release(s) to deep-scrape: %s",
+                            p.upper(), len(never_scraped_rels), never_scraped_rels,
+                        )
+                    effective_releases = sorted(set(configured_target_releases + never_scraped_rels))
+
                 logger.info("Deep-scrape starting: %s (releases filter: %s)",
-                            p.upper(), target_releases or "all")
+                            p.upper(), effective_releases or "all")
                 try:
-                    pages, feats = await self._deep_scrape_product(client, p, target_releases)
+                    pages, feats = await self._deep_scrape_product(client, p, effective_releases)
                     logger.info("Deep-scrape %s complete: %d module pages, %d detail records",
                                 p.upper(), pages, feats)
                 except Exception as e:
