@@ -693,7 +693,7 @@ async def generate_report(params: GenerateReportInput, ctx: Context) -> dict:
     content_by_url: dict[str, dict] = {}
     if params.include_content and entries:
         urls = sorted({e.get("html_url") or e.get("pdf_url") for e in entries if (e.get("html_url") or e.get("pdf_url"))})
-        await ctx.log_info(f"Fetching content for {len(urls)} document(s)…")
+        await ctx.info(f"Fetching content for {len(urls)} document(s)…")
         async with httpx.AsyncClient() as client:
             sem = asyncio.Semaphore(4)
             async def _fetch_one(url):
@@ -825,7 +825,7 @@ async def refresh_readiness_data(params: RefreshInput, ctx: Context) -> dict:
     """Fetch the latest readiness metadata from Oracle right now, without waiting for the scheduled refresh."""
     if params.products:
         _validate_products(params.products)
-    await ctx.log_info(f"Refreshing Oracle readiness data for: {params.products or 'all products'}")
+    await ctx.info(f"Refreshing Oracle readiness data for: {params.products or 'all products'}")
     results = await state.refresh_now(params.products)
     return {"results": results}
 
@@ -1329,7 +1329,7 @@ async def push_report_to_github(params: GitHubPushInput, ctx: Context) -> dict:
     file_path = params.path      or state.settings.github_file_path or "readiness/latest.md"
 
     _validate_products(params.pillars)
-    await ctx.log_info(f"Pushing {len(params.pillars)}-pillar report to github.com/{repo}/{file_path}")
+    await ctx.info(f"Pushing {len(params.pillars)}-pillar report to github.com/{repo}/{file_path}")
 
     try:
         result = await _github_push(
@@ -1465,7 +1465,7 @@ async def search_feature_details(params: DetailSearchInput) -> dict:
 async def deep_scrape_feature_details(params: DeepScrapeInput, ctx: Context) -> dict:
     products = params.products or [p for p in PRODUCT_NAMES if p != "news"]
     releases = [r.upper() for r in params.releases] if params.releases else None
-    await ctx.log_info(f"Deep-scraping feature details for: {products}, releases: {releases or 'all'}")
+    await ctx.info(f"Deep-scraping feature details for: {products}, releases: {releases or 'all'}")
 
     total_pages = 0
     total_feats = 0
@@ -1475,9 +1475,9 @@ async def deep_scrape_feature_details(params: DeepScrapeInput, ctx: Context) -> 
                 pages, feats = await state._deep_scrape_product(client, product, releases)
                 total_pages += pages
                 total_feats += feats
-                await ctx.log_info(f"  {product}: {pages} modules, {feats} features")
+                await ctx.info(f"  {product}: {pages} modules, {feats} features")
             except Exception as e:
-                await ctx.log_info(f"  {product}: failed — {e}")
+                await ctx.info(f"  {product}: failed — {e}")
 
     # Push to GitHub if auto-push enabled
     if state.settings.github_auto_push:
