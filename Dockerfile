@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 LABEL org.opencontainers.image.title="oracle-readiness-mcp" \
       org.opencontainers.image.description="Oracle Cloud Readiness MCP Server — periodic scrape + MCP over HTTP" \
