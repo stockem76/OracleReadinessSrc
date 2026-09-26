@@ -27,7 +27,9 @@ Environment variables:
 from __future__ import annotations
 
 import asyncio
+import csv
 import datetime
+import io
 import json
 import logging
 import logging.handlers
@@ -2090,6 +2092,40 @@ async def _ica_actions(request: Request) -> Response:
     )
 
 
+async def _ica_url_map(request: Request) -> Response:
+    """GET /api/ica/url-map.csv — public feature-name → html_url lookup.
+
+    Returns a two-column CSV (feature_name, html_url) for every feature that
+    has a non-empty html_url in the requested release.  Used by OracleRAG
+    ingest to attach deep-link URLs to vector store documents without needing
+    an authenticated session.
+
+    Query params:
+        release — filter to a specific release (required)
+    """
+    release = request.query_params.get("release", "").strip().upper()
+    if not release:
+        return Response(content="feature_name,html_url\r\n", media_type="text/csv")
+
+    rows = state.db._execute(
+        "SELECT feature_name, html_url FROM features "
+        "WHERE UPPER(release)=? AND html_url IS NOT NULL AND html_url != '' "
+        "ORDER BY feature_name",
+        (release,),
+    ).fetchall()
+
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow(["feature_name", "html_url"])
+    for r in rows:
+        writer.writerow([r["feature_name"] or "", r["html_url"] or ""])
+    return Response(
+        content=out.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=url-map-{release}.csv"},
+    )
+
+
 async def _ica_schema_changes(request: Request) -> JSONResponse:
     """GET /api/ica/schema-changes.json — machine-readable schema change manifest."""
     return JSONResponse(_ica.SCHEMA_CHANGES)
@@ -2549,6 +2585,7 @@ def _build_starlette_app() -> Starlette:
         Route("/api/ica/derivation-methods.csv", _ica_derivation_methods, methods=["GET"]),
         Route("/api/ica/features.csv",          _ica_features,           methods=["GET"]),
         Route("/api/ica/actions.csv",           _ica_actions,            methods=["GET"]),
+        Route("/api/ica/url-map.csv",           _ica_url_map,            methods=["GET"]),
         Route("/api/ica/schema-changes.json",   _ica_schema_changes,     methods=["GET"]),
         *mcp_app.routes,
     ]
